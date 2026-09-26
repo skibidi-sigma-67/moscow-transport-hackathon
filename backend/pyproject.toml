@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Moscow Transport Hackathon Backend"
+description = "Бэкенд-сервис для хакатона Московского Транспорта"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

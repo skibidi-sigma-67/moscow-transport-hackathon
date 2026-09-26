@@ -1,7 +1,7 @@
 [project]
 name = "commons"
 version = "0.1.0"
-description = "Common models and contracts for Moscow Transport Hackathon"
+description = "Общие модели и контракты для хакатона Московского Транспорта"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
