@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -44,8 +45,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
-    await prediction_worker.stop()
-    await ndtp_server.stop()
+    try:
+        async with asyncio.timeout(5.0):
+            await prediction_worker.stop()
+            await ndtp_server.stop()
+    except TimeoutError:
+        pass
 
     await engine.dispose()
     await redis_client.aclose()

@@ -12,7 +12,7 @@ from backend.modules.telemetry.repository import TelemetryRedisRepository
 from backend.modules.telemetry.service import TelemetryService
 from backend.settings import Settings
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.worker")
 
 
 class PredictionWorker:

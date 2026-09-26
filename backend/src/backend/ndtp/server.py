@@ -8,7 +8,7 @@ from backend.modules.telemetry.service import TelemetryService
 from backend.ndtp.parser import NdtpParser
 from backend.settings import Settings
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.ndtp")
 
 
 class NdtpServer:
@@ -43,7 +43,7 @@ class NdtpServer:
 
     async def handle_client(self, reader, writer) -> None:
         addr = writer.get_extra_info("peername")
-        logger.debug(f"New connection from {addr}")
+        logger.info(f"New connection from {addr}")
 
         try:
             while True:
@@ -63,7 +63,7 @@ class NdtpServer:
                 nph = NdtpParser.parse_nph(body_data[: NdtpParser.NPH_SIZE])
 
                 if nph.type == 100:
-                    logger.debug(f"Handshake from unit {npl.peer_address}")
+                    logger.info(f"Handshake from unit {npl.peer_address}")
                     continue
                 elif nph.type == 101:
                     cells_data = body_data[NdtpParser.NPH_SIZE :]
@@ -86,8 +86,8 @@ class NdtpServer:
                                 )
 
                                 await telemetry_service.add_point(mapping.tr_id, point)
-                                logger.debug(
-                                    f"Saved telemetry for tr_id={mapping.tr_id}"
+                                logger.info(
+                                    f"Saved telemetry for tr_id={mapping.tr_id}: {point}"
                                 )
                         except Exception as e:
                             logger.error(f"Error processing telemetry from {addr}: {e}")
