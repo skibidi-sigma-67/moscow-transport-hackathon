@@ -10,7 +10,7 @@ authors = [
     { name = "Расулова Марьям" },
     { name = "Смолянкин Тимофей" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = []
 
 [build-system]
