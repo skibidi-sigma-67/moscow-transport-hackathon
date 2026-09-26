@@ -7,4 +7,5 @@ app:
   telemetry_max_history: 50
 
 ml:
+  url: "http://localhost:8001/predict"
   timeout: 10.0

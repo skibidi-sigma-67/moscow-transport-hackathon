@@ -11,6 +11,7 @@ RUN uv sync --frozen --no-dev
 
 WORKDIR /app/backend
 EXPOSE 8000
+EXPOSE 8001
 EXPOSE 9201
 
 CMD ["uv", "run", "python", "-m", "backend.main"]

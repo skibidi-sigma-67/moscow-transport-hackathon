@@ -9,7 +9,7 @@ from backend.settings import Settings
 from commons.contracts.v1.api.predictions import PredictionLogDto
 from commons.contracts.v1.ml.requests import MLPredictionRequest, TelemetryPoint
 from commons.contracts.v1.ml.responses import MLPredictionResponse
-from commons.enums import RiskLevel
+from commons.enums import IncidentPattern, RiskLevel
 
 from .repository import PredictionRepository
 
@@ -92,7 +92,7 @@ class PredictionService:
             ml_resp = MLPredictionResponse(
                 predicted_delay_s=0.0,
                 risk_level=RiskLevel.GREEN,
-                pattern_reason=f"ML Error: {e}",
+                pattern_reason=IncidentPattern.UNKNOWN_DELAY,
             )
 
         log = await self.repository.save_prediction(
