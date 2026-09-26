@@ -1,12 +1,11 @@
 import struct
-from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import NamedTuple
 
 from commons.contracts.v1.api.telemetry import TelemetryPointDto
 
 
-@dataclass
-class NplHeader:
+class NplHeader(NamedTuple):
     signature: int
     data_size: int
     flags: int
@@ -16,8 +15,7 @@ class NplHeader:
     request_id: int
 
 
-@dataclass
-class NphHeader:
+class NphHeader(NamedTuple):
     service_id: int
     type: int
     flags: int

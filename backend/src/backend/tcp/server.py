@@ -33,8 +33,7 @@ class NdtpServer:
             self.host,
             self.port,
         )
-        addrs = ", ".join(str(sock.getsockname()) for sock in self.server.sockets)
-        logger.info(f"NDTP TCP server listening on {addrs}")
+        logger.info(f"NDTP TCP server listening on {self.host}:{self.port}")
 
     async def stop(self) -> None:
         if self.server:
@@ -42,9 +41,7 @@ class NdtpServer:
             await self.server.wait_closed()
             logger.info("NDTP TCP server stopped")
 
-    async def handle_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def handle_client(self, reader, writer) -> None:
         addr = writer.get_extra_info("peername")
         logger.debug(f"New connection from {addr}")
 

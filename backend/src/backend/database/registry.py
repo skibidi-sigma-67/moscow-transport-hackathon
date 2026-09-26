@@ -3,6 +3,6 @@ from backend.modules.predictions.models import PredictionLog
 from backend.modules.reference.models import DeviceMapping
 from backend.modules.schedule.models import SchedulePlan
 
-__all__ = ["Base", "PredictionLog", "DeviceMapping", "SchedulePlan", "target_metadata"]
+__all__ = ["Base", "DeviceMapping", "PredictionLog", "SchedulePlan", "target_metadata"]
 
 target_metadata = Base.metadata
