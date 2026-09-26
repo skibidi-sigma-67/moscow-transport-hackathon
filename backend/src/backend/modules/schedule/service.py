@@ -24,6 +24,15 @@ class ScheduleService:
 
         return SchedulePlanDto.model_validate(plan)
 
+    async def get_previous_stop(
+        self, tr_id: int, current_time: datetime
+    ) -> SchedulePlanDto | None:
+        plan = await self.repository.get_previous_stop(tr_id, current_time)
+        if not plan:
+            return None
+
+        return SchedulePlanDto.model_validate(plan)
+
     async def get_stop_plan(
         self, tr_id: int, stop_id: int
     ) -> SchedulePlanDto | None:

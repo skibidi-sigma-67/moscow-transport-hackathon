@@ -1,7 +1,8 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import redis.asyncio as redis
+from geopy.distance import distance as geopy_distance
 
 from backend.modules.schedule.service import ScheduleService
 from backend.modules.telemetry.service import TelemetryService
@@ -32,10 +33,22 @@ class PredictionService:
     async def generate_prediction(self, tr_id: int) -> PredictionLogDto:
         history = await self.telemetry.get_history(tr_id)
 
+        clock_str = await self.redis.get("replay:clock")
+        if clock_str:
+            current_time_t = datetime.fromisoformat(clock_str.decode("utf-8"))
+        else:
+            current_time_t = datetime.now(UTC)
+
         segment_avg_speed = 0.0
         idle_time_s = 0.0
         telemetry_points = []
         history_sorted = []
+        coverage_ratio = 0.0
+
+        window_start = current_time_t - timedelta(
+            minutes=self.settings.app.ml_telemetry_window_minutes
+        )
+        window_end = current_time_t
 
         if history:
             speeds = [p.speed for p in history]
@@ -44,12 +57,18 @@ class PredictionService:
             history_sorted = sorted(history, key=lambda x: x.timestamp)
 
             for i in range(1, len(history_sorted)):
-                if history_sorted[i].speed < 3:
-                    delta = (
-                        history_sorted[i].timestamp - history_sorted[i - 1].timestamp
-                    ).total_seconds()
+                delta = (
+                    history_sorted[i].timestamp - history_sorted[i - 1].timestamp
+                ).total_seconds()
+                
+                if delta > self.settings.app.max_idle_gap_s:
+                    continue
+
+                if history_sorted[i].speed < self.settings.app.stop_speed_threshold_kmh:
                     idle_time_s += max(0, delta)
 
+            window_points = [p for p in history_sorted if window_start <= p.timestamp <= window_end]
+            
             telemetry_points = [
                 TelemetryPoint(
                     timestamp=p.timestamp,
@@ -57,13 +76,28 @@ class PredictionService:
                     latitude=p.latitude,
                     speed=float(p.speed),
                     course=float(p.course),
+                    location_valid=p.location_valid,
+                    packet_time=p.packet_time if p.packet_time else p.timestamp,
+                    is_historical=p.is_historical,
                 )
-                for p in history_sorted[-20:]
+                for p in window_points
             ]
 
-        current_time_t = (
-            history_sorted[-1].timestamp if history_sorted else datetime.now(UTC)
-        )
+            expected_points = (self.settings.app.ml_telemetry_window_minutes * 60) / 10.0
+            coverage_ratio = min(1.0, len(window_points) / expected_points)
+
+        cur_dev_s = 0.0
+        previous_stop = await self.schedule.get_previous_stop(tr_id, current_time_t)
+
+        if previous_stop and previous_stop.longitude and previous_stop.latitude and history_sorted:
+            for p in reversed(history_sorted):
+                dist = geopy_distance(
+                    (p.latitude, p.longitude), (previous_stop.latitude, previous_stop.longitude)
+                ).meters
+
+                if dist < 50.0 and p.speed < self.settings.app.stop_speed_threshold_kmh:
+                    cur_dev_s = (p.timestamp - previous_stop.time_begin).total_seconds()
+                    break
 
         next_stop = await self.schedule.get_next_stop(tr_id, current_time_t)
         if not next_stop:
@@ -74,9 +108,12 @@ class PredictionService:
             target_stop_id=next_stop.stop_id,
             target_time_begin=next_stop.time_begin,
             current_time_T=current_time_t,
-            cur_dev_s=0.0,
+            cur_dev_s=cur_dev_s,
             segment_avg_speed=segment_avg_speed,
             idle_time_s=idle_time_s,
+            window_start_time=window_start,
+            window_end_time=window_end,
+            coverage_ratio=coverage_ratio,
             recent_telemetry=telemetry_points,
         )
 
@@ -89,17 +126,31 @@ class PredictionService:
                 resp.raise_for_status()
                 ml_resp = MLPredictionResponse.model_validate_json(resp.read())
         except Exception as e:
+            fallback_delay = cur_dev_s
+
+            if fallback_delay > 300:
+                risk = RiskLevel.RED
+            elif fallback_delay > 120:
+                risk = RiskLevel.YELLOW
+            else:
+                risk = RiskLevel.GREEN
+
             ml_resp = MLPredictionResponse(
-                predicted_delay_s=0.0,
-                risk_level=RiskLevel.GREEN,
-                pattern_reason=f"ML Error: {e}",
+                predicted_delay_s=fallback_delay,
+                risk_level=risk,
+                pattern_reason=None,
             )
+            error_text = f"ML Error: {e}"
+        else:
+            error_text = None
 
         log = await self.repository.save_prediction(
             tr_id=tr_id,
             predicted_delay_s=ml_resp.predicted_delay_s,
             risk_level=ml_resp.risk_level,
             pattern_reason=ml_resp.pattern_reason,
+            error_text=error_text,
+            status="ERROR" if error_text else "OK",
         )
 
         dto = PredictionLogDto(
