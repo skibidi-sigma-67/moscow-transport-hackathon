@@ -12,3 +12,5 @@ class PredictionLog(Base, IdMixin, TimestampMixin):
     predicted_delay_s: Mapped[float] = mapped_column(Float)
     risk_level: Mapped[str] = mapped_column(String(32))
     pattern_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="OK")
+    error_text: Mapped[str | None] = mapped_column(String, nullable=True)

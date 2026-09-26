@@ -15,12 +15,16 @@ class PredictionRepository:
         predicted_delay_s: float,
         risk_level: RiskLevel,
         pattern_reason: str | None = None,
+        status: str = "OK",
+        error_text: str | None = None,
     ) -> PredictionLog:
         log = PredictionLog(
             tr_id=tr_id,
             predicted_delay_s=predicted_delay_s,
             risk_level=risk_level.value,
             pattern_reason=pattern_reason,
+            status=status,
+            error_text=error_text,
         )
 
         self.session.add(log)
