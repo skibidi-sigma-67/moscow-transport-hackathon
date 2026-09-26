@@ -10,7 +10,7 @@ from backend.settings import Settings
 @pytest.mark.asyncio
 async def test_telemetry_add_point_and_get_history(redis_client):
     settings = Settings()
-    repo = TelemetryRedisRepository(redis_client, settings)
+    repository = TelemetryRedisRepository(redis_client, settings)
 
     unit_id = 999
 
@@ -30,10 +30,10 @@ async def test_telemetry_add_point_and_get_history(redis_client):
         course=92.0,
     )
 
-    await repo.add_point(unit_id, point1)
-    await repo.add_point(unit_id, point2)
+    await repository.add_point(unit_id, point1)
+    await repository.add_point(unit_id, point2)
 
-    history = await repo.get_history(unit_id)
+    history = await repository.get_history(unit_id)
 
     assert len(history) == 2
     assert history[0].longitude == 37.0
@@ -44,7 +44,7 @@ async def test_telemetry_add_point_and_get_history(redis_client):
 async def test_telemetry_ltrim_max_history(redis_client):
     settings = Settings()
     settings.app.telemetry_max_history = 3
-    repo = TelemetryRedisRepository(redis_client, settings)
+    repository = TelemetryRedisRepository(redis_client, settings)
 
     unit_id = 888
 
@@ -56,9 +56,9 @@ async def test_telemetry_ltrim_max_history(redis_client):
             speed=10.0,
             course=90.0,
         )
-        await repo.add_point(unit_id, point)
+        await repository.add_point(unit_id, point)
 
-    history = await repo.get_history(unit_id)
+    history = await repository.get_history(unit_id)
 
     assert len(history) == 3
     assert history[0].longitude == pytest.approx(37.2)
@@ -68,9 +68,9 @@ async def test_telemetry_ltrim_max_history(redis_client):
 @pytest.mark.asyncio
 async def test_telemetry_get_active_vehicles(redis_client):
     settings = Settings()
-    repo = TelemetryRedisRepository(redis_client, settings)
+    repository = TelemetryRedisRepository(redis_client, settings)
 
-    await repo.add_point(
+    await repository.add_point(
         101,
         RedisTelemetryRecord(
             timestamp=datetime.now(UTC),
@@ -81,7 +81,7 @@ async def test_telemetry_get_active_vehicles(redis_client):
         ),
     )
 
-    await repo.add_point(
+    await repository.add_point(
         102,
         RedisTelemetryRecord(
             timestamp=datetime.now(UTC) - timedelta(minutes=15),
@@ -92,7 +92,7 @@ async def test_telemetry_get_active_vehicles(redis_client):
         ),
     )
 
-    active = await repo.get_active_vehicles(minutes=5)
+    active = await repository.get_active_vehicles(minutes=5)
 
     assert 101 in active
     assert 102 not in active

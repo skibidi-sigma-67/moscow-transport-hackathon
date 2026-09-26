@@ -5,8 +5,8 @@ from backend.modules.reference.repository import DeviceRepository
 from backend.modules.reference.service import DeviceService
 from backend.modules.telemetry.repository import TelemetryRedisRepository
 from backend.modules.telemetry.service import TelemetryService
+from backend.ndtp.parser import NdtpParser
 from backend.settings import Settings
-from backend.tcp.parser import NdtpParser
 
 logger = logging.getLogger(__name__)
 

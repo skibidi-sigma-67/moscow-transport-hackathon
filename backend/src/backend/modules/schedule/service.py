@@ -24,6 +24,15 @@ class ScheduleService:
 
         return SchedulePlanDto.model_validate(plan)
 
+    async def get_stop_plan(
+        self, tr_id: int, stop_id: int
+    ) -> SchedulePlanDto | None:
+        plan = await self.repository.get_stop_plan(tr_id, stop_id)
+        if not plan:
+            return None
+
+        return SchedulePlanDto.model_validate(plan)
+
     async def upload_schedule_csv(self, file: UploadFile) -> int:
         content = await file.read()
         text = content.decode("utf-8")

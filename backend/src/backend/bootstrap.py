@@ -6,9 +6,9 @@ from fastapi import FastAPI
 from backend.api.v1.router import v1_router
 from backend.database.engine import create_engine, create_session_maker
 from backend.modules.predictions.worker import PredictionWorker
+from backend.ndtp.server import NdtpServer
 from backend.redis.client import create_redis_pool
 from backend.settings import get_settings
-from backend.tcp.server import NdtpServer
 
 
 @asynccontextmanager
@@ -24,8 +24,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.redis_client = redis_client
 
     ndtp_server = NdtpServer(
-        host=settings.tcp.host,
-        port=settings.tcp.port,
+        host=settings.ndtp.host,
+        port=settings.ndtp.port,
         session_maker=app.state.session_maker,
         redis_client=app.state.redis_client,
         settings=settings,

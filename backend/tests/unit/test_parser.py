@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from backend.tcp.parser import NdtpParser
+from backend.ndtp.parser import NdtpParser
 from commons.contracts.v1.api.telemetry import TelemetryPointDto
 
 

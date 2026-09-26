@@ -39,7 +39,7 @@ class MLSettings(BaseModel):
     timeout: float = 10.0
 
 
-class TCPSettings(BaseModel):
+class NDTPSettings(BaseModel):
     host: str = "0.0.0.0"
     port: int = 9201
 
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     app: AppSettings = AppSettings()
     database: DatabaseSettings = DatabaseSettings()
     redis: RedisSettings = RedisSettings()
-    tcp: TCPSettings = TCPSettings()
+    ndtp: NDTPSettings = NDTPSettings()
     ml: MLSettings = MLSettings()
 
     model_config = SettingsConfigDict(

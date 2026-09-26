@@ -19,11 +19,11 @@ async def test_dashboard_triggers_prediction(app_client, redis_client, session):
     tr_id = 777
     current_time = datetime.now(UTC)
 
-    repo = TelemetryRedisRepository(redis_client, settings)
+    repository = TelemetryRedisRepository(redis_client, settings)
     point = RedisTelemetryRecord(
         timestamp=current_time, longitude=37.0, latitude=55.0, speed=25, course=90
     )
-    await repo.add_point(tr_id, point)
+    await repository.add_point(tr_id, point)
 
     plan = SchedulePlan(
         tr_id=tr_id,
@@ -36,7 +36,7 @@ async def test_dashboard_triggers_prediction(app_client, redis_client, session):
     session.add(plan)
     await session.commit()
 
-    mock_resp = MLPredictionResponse(
+    mock_response = MLPredictionResponse(
         predicted_delay_s=120.0,
         risk_level=RiskLevel.YELLOW,
         pattern_reason="Test reason",
@@ -44,7 +44,7 @@ async def test_dashboard_triggers_prediction(app_client, redis_client, session):
 
     with respx.mock(assert_all_called=True) as respx_mock:
         route = respx_mock.post(settings.ml.url).mock(
-            return_value=Response(200, json=mock_resp.model_dump(mode="json"))
+            return_value=Response(200, json=mock_response.model_dump(mode="json"))
         )
 
         await app_client.post(f"/api/v1/predictions/{tr_id}/trigger")
