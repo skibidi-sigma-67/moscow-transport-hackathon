@@ -9,3 +9,6 @@ class RedisTelemetryRecord(FrozenModel):
     latitude: float
     speed: float
     course: float
+    location_valid: bool = True
+    packet_time: datetime | None = None
+    is_historical: bool = False
