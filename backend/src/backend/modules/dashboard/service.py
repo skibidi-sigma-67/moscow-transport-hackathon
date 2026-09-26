@@ -34,14 +34,14 @@ class DashboardService:
             incident_card = None
 
             if prediction_json:
-                pred = PredictionLogDto.model_validate_json(prediction_json)
-                risk_color = pred.risk_level
+                prediction_log = PredictionLogDto.model_validate_json(prediction_json)
+                risk_color = prediction_log.risk_level
 
                 if risk_color != RiskLevel.GREEN:
                     incident_card = IncidentCard(
                         has_incident=True,
-                        predicted_delay_s=pred.predicted_delay_s,
-                        reason=pred.pattern_reason,
+                        predicted_delay_s=prediction_log.predicted_delay_s,
+                        reason=prediction_log.pattern_reason,
                         route_segment=f"Segment for tr_id {tr_id}",
                     )
 
