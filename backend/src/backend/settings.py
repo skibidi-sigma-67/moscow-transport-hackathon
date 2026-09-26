@@ -11,6 +11,10 @@ class AppSettings(BaseModel):
     port: int = 8000
     prediction_cache_ttl: int = 600
     telemetry_max_history: int = 50
+    stop_speed_threshold_kmh: float = 5.0
+    ml_telemetry_window_minutes: int = 30
+    max_idle_gap_s: float = 120.0
+    historical_packet_delay_s: float = 300.0
 
 
 class DatabaseSettings(BaseModel):

@@ -5,6 +5,9 @@ app:
   port: 8000
   prediction_cache_ttl: 600
   telemetry_max_history: 50
-
+  stop_speed_threshold_kmh: 5.0
+  ml_telemetry_window_minutes: 30
+  max_idle_gap_s: 120.0
+  historical_packet_delay_s: 300.0
 ml:
   timeout: 10.0
