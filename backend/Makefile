@@ -12,3 +12,9 @@ lint:
 format:
 	uv run ruff check --fix .
 	uv run ruff format .
+
+make-migrations:
+	uv run alembic revision --autogenerate -m "$(m)"
+
+migrate:
+	uv run alembic upgrade head
