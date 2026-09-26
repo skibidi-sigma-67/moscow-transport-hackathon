@@ -63,7 +63,9 @@ class NdtpParser:
         )
 
     @staticmethod
-    def parse_realtime_cells(data: bytes) -> TelemetryPointDto | None:
+    def parse_realtime_cells(
+        data: bytes, packet_time: datetime, is_historical: bool = False
+    ) -> TelemetryPointDto | None:
         offset = 0
         total_len = len(data)
 
@@ -97,12 +99,17 @@ class NdtpParser:
                 if not is_east:
                     lon = -lon
 
+                location_valid = bool(lon != 0.0 and lat != 0.0)
+
                 return TelemetryPointDto(
                     timestamp=datetime.fromtimestamp(timestamp, UTC),
                     longitude=lon,
                     latitude=lat,
                     speed=speed_avg,
                     course=course,
+                    location_valid=location_valid,
+                    packet_time=packet_time,
+                    is_historical=is_historical,
                 )
             elif cell_type == 2:
                 offset += 26

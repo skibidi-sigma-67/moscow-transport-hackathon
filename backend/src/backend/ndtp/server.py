@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import UTC, datetime
 
 from backend.modules.reference.repository import DeviceRepository
 from backend.modules.reference.service import DeviceService
@@ -67,28 +68,41 @@ class NdtpServer:
                     continue
                 elif nph.type == 101:
                     cells_data = body_data[NdtpParser.NPH_SIZE :]
-                    point = NdtpParser.parse_realtime_cells(cells_data)
+                    packet_time = datetime.now(UTC)
+                    point = NdtpParser.parse_realtime_cells(
+                        cells_data, packet_time=packet_time, is_historical=False
+                    )
 
                     if point:
                         try:
-                            async with self.session_maker() as session:
-                                device_service = DeviceService(
-                                    DeviceRepository(session)
-                                )
-                                telemetry_service = TelemetryService(
-                                    TelemetryRedisRepository(
-                                        self.redis_client, self.settings
-                                    )
-                                )
+                            cache_key = f"device_mapping:{npl.peer_address}"
+                            tr_id_str = await self.redis_client.get(cache_key)
+                            
+                            if tr_id_str:
+                                tr_id = int(tr_id_str)
+                            else:
+                                async with self.session_maker() as session, session.begin():
+                                    device_service = DeviceService(DeviceRepository(session))
+                                    tr_id = await device_service.get_tr_id(npl.peer_address)
+                                
+                                if tr_id:
+                                    await self.redis_client.setex(cache_key, 3600, tr_id)
 
-                                mapping = await device_service.register_device(
-                                    unit_id=npl.peer_address, tr_id=npl.peer_address
-                                )
+                            if not tr_id:
+                                logger.warning(f"Unknown unit_id {npl.peer_address}")
+                                continue
 
-                                await telemetry_service.add_point(mapping.tr_id, point)
-                                logger.info(
-                                    f"Saved telemetry for tr_id={mapping.tr_id}: {point}"
-                                )
+                            telemetry_service = TelemetryService(
+                                TelemetryRedisRepository(self.redis_client, self.settings)
+                            )
+
+                            if (packet_time - point.timestamp).total_seconds() > self.settings.app.historical_packet_delay_s:
+                                point = point.model_copy(update={"is_historical": True})
+
+                            await telemetry_service.add_point(tr_id, point)
+                            logger.info(
+                                f"Saved telemetry for tr_id={tr_id}: {point}"
+                            )
                         except Exception as e:
                             logger.error(f"Error processing telemetry from {addr}: {e}")
                 else:
