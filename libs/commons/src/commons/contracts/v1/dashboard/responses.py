@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from commons.enums import RiskLevel
+from commons.enums import IncidentPattern, RiskLevel
 from commons.pydantic.models import FrozenModel
 
 
@@ -11,9 +11,9 @@ class IncidentCard(FrozenModel):
     predicted_delay_s: float | None = Field(
         None, description="Предсказанная задержка в секундах, если есть инцидент"
     )
-    reason: str | None = Field(
+    reason: IncidentPattern | None = Field(
         None,
-        description="Текстовое описание причины инцидента или обнаруженного паттерна",
+        description="Технический код паттерна инцидента (например, 'TRAFFIC_JAM')",
     )
     route_segment: str | None = Field(
         None, description="Участок маршрута, где прогнозируется задержка"

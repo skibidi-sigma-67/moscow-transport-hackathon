@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from commons.enums import RiskLevel
+from commons.enums import IncidentPattern, RiskLevel
 from commons.pydantic.models import FrozenModel
 
 
@@ -9,7 +9,7 @@ class MLPredictionResponse(FrozenModel):
         ..., description="Спрогнозированная задержка (в секундах)"
     )
     risk_level: RiskLevel = Field(..., description="Оценка риска (GREEN, YELLOW, RED)")
-    pattern_reason: str | None = Field(
+    pattern_reason: IncidentPattern | None = Field(
         None,
-        description="Выявленный ML-моделью паттерн (например, 'Пробка на перекрестке')",
+        description="Технический код паттерна инцидента (например, 'TRAFFIC_JAM')",
     )

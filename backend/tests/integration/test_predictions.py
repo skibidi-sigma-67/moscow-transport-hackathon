@@ -9,7 +9,7 @@ from backend.modules.telemetry.models import RedisTelemetryRecord
 from backend.modules.telemetry.repository import TelemetryRedisRepository
 from backend.settings import Settings
 from commons.contracts.v1.ml.responses import MLPredictionResponse
-from commons.enums import RiskLevel
+from commons.enums import IncidentPattern, RiskLevel
 
 
 @pytest.mark.asyncio
@@ -39,7 +39,7 @@ async def test_dashboard_triggers_prediction(app_client, redis_client, session):
     mock_response = MLPredictionResponse(
         predicted_delay_s=120.0,
         risk_level=RiskLevel.YELLOW,
-        pattern_reason="Test reason",
+        pattern_reason=IncidentPattern.TRAFFIC_JAM,
     )
 
     with respx.mock(assert_all_called=True) as respx_mock:
