@@ -23,7 +23,7 @@ class NphHeader(NamedTuple):
 
 
 class NdtpParser:
-    NPL_FMT = "<HHHHIBH"
+    NPL_FMT = "<HHHHBIH"
     NPL_SIZE = 15
 
     NPH_FMT = "<HHHI"

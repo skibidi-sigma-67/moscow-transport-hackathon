@@ -8,7 +8,7 @@ from commons.contracts.v1.api.telemetry import TelemetryPointDto
 
 
 def test_parse_npl_success():
-    data = struct.pack("<HHHHIBH", 0x7E7E, 50, 0, 0, 1, 123, 1001)
+    data = struct.pack("<HHHHBIH", 0x7E7E, 50, 0, 0, 1, 123, 1001)
 
     npl = NdtpParser.parse_npl(data)
 
