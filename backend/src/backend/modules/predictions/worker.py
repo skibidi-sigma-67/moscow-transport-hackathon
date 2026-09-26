@@ -63,14 +63,8 @@ class PredictionWorker:
     async def _run(self) -> None:
         while not self._stop_event.is_set():
             try:
-                keys = await self.redis.keys("telemetry:point:*")
-                tr_ids = []
-
-                for k in keys:
-                    try:
-                        tr_ids.append(int(k.decode("utf-8").split(":")[-1]))
-                    except ValueError, AttributeError:
-                        continue
+                telemetry_repo = TelemetryRedisRepository(self.redis, self.settings)
+                tr_ids = await telemetry_repo.get_active_vehicles(minutes=15)
 
                 if not tr_ids:
                     await self._sleep_with_stop(5.0)
@@ -78,26 +72,30 @@ class PredictionWorker:
 
                 delay_per_vehicle = self.target_cycle_time_s / len(tr_ids)
 
-                for tr_id in tr_ids:
-                    if self._stop_event.is_set():
-                        break
+                async def delayed_process(tr_id: int, delay: float) -> None:
+                    await self._sleep_with_stop(delay)
+                    if not self._stop_event.is_set():
+                        try:
+                            await self._process_vehicle(tr_id)
+                        except Exception:
+                            logger.exception(
+                                "Error processing predictions for tr_id %d",
+                                tr_id,
+                            )
 
-                    try:
-                        await self._process_vehicle(tr_id)
-                    except Exception:
-                        logger.exception(
-                            "Error processing predictions for tr_id %d",
-                            tr_id,
-                        )
+                tasks = [
+                    delayed_process(tr_id, i * delay_per_vehicle)
+                    for i, tr_id in enumerate(tr_ids)
+                ]
 
-                    await self._sleep_with_stop(delay_per_vehicle)
+                await asyncio.gather(*tasks, return_exceptions=True)
 
             except Exception:
                 logger.exception("Worker %s crashed in outer loop", self.name)
                 await self._sleep_with_stop(5.0)
 
     async def _process_vehicle(self, tr_id: int) -> None:
-        async with self.session_maker() as session:
+        async with self.session_maker() as session, session.begin():
             prediction_repo = PredictionRepository(session)
             telemetry_repo = TelemetryRedisRepository(self.redis, self.settings)
             schedule_repo = ScheduleRepository(session)
