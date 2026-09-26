@@ -22,28 +22,45 @@ class DashboardService:
     async def get_current_state(self) -> DashboardStateResponse:
         active_ids = await self.telemetry.get_active_vehicles(minutes=5)
 
+        if not active_ids:
+            return DashboardStateResponse(timestamp=datetime.now(UTC), vehicles=[])
+
+        async with self.redis.pipeline() as pipe:
+            for tr_id in active_ids:
+                pipe.lindex(f"telemetry:history:{tr_id}", -1)
+                pipe.get(f"vehicle_prediction:{tr_id}")
+            
+            results = await pipe.execute()
+
+        from backend.modules.telemetry.models import RedisTelemetryRecord
+
         vehicles = []
-        for tr_id in active_ids:
-            latest_point = await self.telemetry.get_latest_point(tr_id)
-            if not latest_point:
+        for i, tr_id in enumerate(active_ids):
+            point_json = results[i * 2]
+            prediction_json = results[i * 2 + 1]
+
+            if not point_json:
                 continue
 
-            prediction_json = await self.redis.get(f"vehicle_prediction:{tr_id}")
+            latest_point = RedisTelemetryRecord.model_validate_json(point_json)
 
             risk_color = RiskLevel.GREEN
             incident_card = None
 
             if prediction_json:
-                prediction_log = PredictionLogDto.model_validate_json(prediction_json)
-                risk_color = prediction_log.risk_level
+                try:
+                    prediction_log = PredictionLogDto.model_validate_json(prediction_json)
+                    risk_color = prediction_log.risk_level
 
-                if risk_color != RiskLevel.GREEN:
-                    incident_card = IncidentCard(
-                        has_incident=True,
-                        predicted_delay_s=prediction_log.predicted_delay_s,
-                        reason=prediction_log.pattern_reason,
-                        route_segment=f"Segment for tr_id {tr_id}",
-                    )
+                    if risk_color != RiskLevel.GREEN:
+                        incident_card = IncidentCard(
+                            has_incident=True,
+                            predicted_delay_s=prediction_log.predicted_delay_s,
+                            reason=prediction_log.pattern_reason,
+                            route_segment=f"Segment for tr_id {tr_id}",
+                        )
+                except Exception:
+                    pass
 
             vehicles.append(
                 VehicleState(

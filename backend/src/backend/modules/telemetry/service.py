@@ -15,6 +15,9 @@ class TelemetryService:
             latitude=point_dto.latitude,
             speed=point_dto.speed,
             course=point_dto.course,
+            location_valid=point_dto.location_valid,
+            packet_time=point_dto.packet_time,
+            is_historical=point_dto.is_historical,
         )
         await self.repository.add_point(unit_id, record)
 
@@ -27,6 +30,9 @@ class TelemetryService:
                 latitude=r.latitude,
                 speed=r.speed,
                 course=r.course,
+                location_valid=r.location_valid,
+                packet_time=r.packet_time,
+                is_historical=r.is_historical,
             )
             for r in records
         ]
@@ -35,8 +41,17 @@ class TelemetryService:
         return await self.repository.get_active_vehicles(minutes)
 
     async def get_latest_point(self, unit_id: int) -> TelemetryPointDto | None:
-        history = await self.get_history(unit_id)
-        if not history:
+        record = await self.repository.get_latest_point(unit_id)
+        if not record:
             return None
 
-        return history[-1]
+        return TelemetryPointDto(
+            timestamp=record.timestamp,
+            longitude=record.longitude,
+            latitude=record.latitude,
+            speed=record.speed,
+            course=record.course,
+            location_valid=record.location_valid,
+            packet_time=record.packet_time,
+            is_historical=record.is_historical,
+        )

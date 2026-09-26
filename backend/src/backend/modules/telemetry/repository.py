@@ -32,7 +32,7 @@ class TelemetryRedisRepository:
         raw_ids = await self.redis.zrevrangebyscore(
             "active_vehicles", "+inf", min_score
         )
-        return [int(uid) for uid in raw_ids]  # type: ignore
+        return [int(uid) for uid in raw_ids]
 
     async def get_history(self, unit_id: int) -> list[RedisTelemetryRecord]:
         key = self._get_key(unit_id)
@@ -43,3 +43,12 @@ class TelemetryRedisRepository:
             history.append(RedisTelemetryRecord.model_validate_json(item))
 
         return history
+
+    async def get_latest_point(self, unit_id: int) -> RedisTelemetryRecord | None:
+        key = self._get_key(unit_id)
+
+        raw_item = await self.redis.lindex(key, -1)
+        if not raw_item:
+            return None
+
+        return RedisTelemetryRecord.model_validate_json(raw_item)
