@@ -38,22 +38,17 @@
 
 ## Развертывание и запуск
 
-Для запуска комплекса в локальной или серверной среде используется Docker Compose. Убедитесь, что на целевом узле установлены Docker и Docker Compose (v2+).
+Подробная инструкция по настройке окружения (включая ключи Yandex Maps API) и запуску системы доступна в отдельном документе:
+👉 **[Руководство по развертыванию и запуску (docs/deployment.md)](docs/deployment.md)**
 
-1. Склонируйте репозиторий проекта:
-   ```bash
-   git clone <repository_url>
-   cd moscow-transport-hackathon
-   ```
-
-2. Запустите развертывание контейнеров:
-   ```bash
-   docker compose up -d --build
-   ```
-
-3. После завершения инициализации сервисы будут доступны по следующим адресам:
-   - API Backend (интерактивная документация Swagger): `http://localhost:8000/docs`
-   - ML API (интерактивная документация Swagger): `http://localhost:8001/docs`
+### Краткий старт (Docker Compose)
+Для быстрого запуска в тестовой среде (при наличии настроенного `.env`):
+```bash
+git clone <repository_url>
+cd moscow-transport-hackathon
+docker compose up -d --build
+```
+После запуска основной **Dashboard будет доступен по порту 80** (`http://localhost`).
 
 ## Команда разработки
 
