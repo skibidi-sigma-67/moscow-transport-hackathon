@@ -239,7 +239,7 @@ def run(root, winner, output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path, default=ROOT)
-    parser.add_argument("--winner", type=Path, default=OUTPUT / "legacy-upgrade-v3")
-    parser.add_argument("--output", type=Path, default=OUTPUT / "legacy-upgrade-v4b")
+    parser.add_argument("--winner", type=Path, default=OUTPUT / "model_2")
+    parser.add_argument("--output", type=Path, default=OUTPUT / "model_3")
     args = parser.parse_args()
     run(args.dataset, args.winner, args.output)

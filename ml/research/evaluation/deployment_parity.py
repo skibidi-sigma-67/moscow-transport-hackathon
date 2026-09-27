@@ -105,7 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=Path, default=ROOT)
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument(
-        "--submission", type=Path, default=OUTPUT / "legacy-upgrade-v5/submission.csv"
+        "--submission", type=Path, default=OUTPUT / "model_4/submission.csv"
     )
     args = parser.parse_args()
     print(json.dumps(run(args.dataset, args.bundle, args.submission)))

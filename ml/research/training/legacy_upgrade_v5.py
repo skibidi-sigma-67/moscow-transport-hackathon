@@ -218,9 +218,9 @@ def run(root, winner, previous, output, report_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path, default=ROOT)
-    parser.add_argument("--winner", type=Path, default=OUTPUT / "legacy-upgrade-v4b")
-    parser.add_argument("--previous", type=Path, default=OUTPUT / "legacy-upgrade-v3")
-    parser.add_argument("--output", type=Path, default=OUTPUT / "legacy-upgrade-v5")
+    parser.add_argument("--winner", type=Path, default=OUTPUT / "model_3")
+    parser.add_argument("--previous", type=Path, default=OUTPUT / "model_2")
+    parser.add_argument("--output", type=Path, default=OUTPUT / "model_4")
     parser.add_argument(
         "--report",
         type=Path,

@@ -2,12 +2,12 @@
   "strategy": "schedule_ensemble_v1",
   "sha256": {
     "delay.cbm": "ba14aef5bff334b160e3bad98525af29edc2d07bd4dddc8ca23e85b51a8d900d",
-    "legacy-upgrade-v3/delay.cbm": "994e95749d4d1efbf9e8e0acca77a4b5696bfa933d08f653dbf276922ba6060b",
-    "legacy-upgrade-v3/metadata.json": "c8a0ae23ac9d1f5c1ca8a27a4b8d3be6fbbaae3f04d49a42422ecc0fbac1e90f",
-    "legacy-upgrade-v4b/delay.cbm": "5d663592fb4387dabc79890c7950b28879f27fe391b53cf303abd2787299471d",
-    "legacy-upgrade-v4b/metadata.json": "79a6a1847341d9cd7d23756cb712baff5802c554caddf0f83dd45647e1470523",
-    "legacy-upgrade-v5/delay.cbm": "abf81c67a48b92611fcad3f0d476826c0d26d7764c674fb7bf879bd47f43b3a9",
-    "legacy-upgrade-v5/metadata.json": "b775da27fdcf0f3b3ed65c225fdd80ee577de13731ec910d8b794d3a607b8c6c",
+    "model_2/delay.cbm": "994e95749d4d1efbf9e8e0acca77a4b5696bfa933d08f653dbf276922ba6060b",
+    "model_2/metadata.json": "c8a0ae23ac9d1f5c1ca8a27a4b8d3be6fbbaae3f04d49a42422ecc0fbac1e90f",
+    "model_3/delay.cbm": "5d663592fb4387dabc79890c7950b28879f27fe391b53cf303abd2787299471d",
+    "model_3/metadata.json": "79a6a1847341d9cd7d23756cb712baff5802c554caddf0f83dd45647e1470523",
+    "model_4/delay.cbm": "abf81c67a48b92611fcad3f0d476826c0d26d7764c674fb7bf879bd47f43b3a9",
+    "model_4/metadata.json": "b775da27fdcf0f3b3ed65c225fdd80ee577de13731ec910d8b794d3a607b8c6c",
     "metadata.json": "558682e7ebe251536f7a36c2574d1c3883c2c8a4d4110d26811017fd5c6e5933",
     "schedule_plan.csv": "c9b561743a5cb83616941b02b47c5aded89e75218d93c13a282a2e8c790787c8"
   },
