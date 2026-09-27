@@ -1,6 +1,6 @@
 import csv
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from io import StringIO
 
 from fastapi import UploadFile
@@ -69,6 +69,12 @@ class ScheduleService:
                 time_begin = datetime.strptime(
                     clean_time_str, "%Y-%m-%d %H:%M:%S"
                 ).replace(tzinfo=UTC)
+                
+                now_date = datetime.now(UTC).date()
+                schedule_date = time_begin.date()
+                days_diff = (now_date - schedule_date).days
+                time_begin = time_begin + timedelta(days=days_diff)
+                
             except ValueError as e:
                 print(f"FAILED TO PARSE: {repr(time_begin_str)}")
                 raise e
