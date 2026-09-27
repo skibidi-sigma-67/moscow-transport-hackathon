@@ -11,6 +11,3 @@ __pycache__
 *.pyd
 
 tests/
-research/
-artifacts/
-data/
