@@ -12,9 +12,6 @@
 !ml/pyproject.toml
 !ml/src/
 !ml/src/**
-!ml/artifacts/
-!ml/artifacts/delay.cbm
-!ml/artifacts/metadata.json
 **/__pycache__/
 **/*.pyc
 **/.DS_Store

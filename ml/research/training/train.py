@@ -127,23 +127,8 @@ def run(root, out):
     y = p.target_delay_s.to_numpy()
     folds = splits(p)
     basic = ["cur_dev_s", "horizon_s", "hour_sin", "hour_cos"]
-    new = [
-        c
-        for c in x
-        if c.startswith(
-            (
-                "time_",
-                "safe_",
-                "current_stop",
-                "since_moving",
-                "stop_count",
-                "gps_jumps",
-            )
-        )
-    ]
-    legacy = [c for c in x if c not in new]
     weighted = (
-        basic + ["gps_age_s", "cur_dev_zero", "cur_dev_per_horizon", "last_speed"] + new
+        basic + ["gps_age_s", "cur_dev_zero", "cur_dev_per_horizon", "last_speed"]
     )
     experiments, predictions = [], []
     configs = [
@@ -158,10 +143,9 @@ def run(root, out):
         ]
     ]
     for cols in [
-        legacy,
+        list(x),
         weighted,
         weighted + ["vehicle", "longitude", "latitude"],
-        list(x),
     ]:
         for mode in ["direct", "residual"]:
             for config in configs:

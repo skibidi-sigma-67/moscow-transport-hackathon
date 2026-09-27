@@ -12,9 +12,11 @@ import numpy as np
 from research.data.dataset import OUTPUT
 
 
-def run(url, output=OUTPUT / "benchmark.json", arrival_rate=20.0, requests=300):
+def run(
+    url, output=OUTPUT / "benchmark.json", arrival_rate=20.0, requests=300, payload=None
+):
     now = datetime(2026, 1, 6, 12, tzinfo=UTC)
-    payload = {
+    payload = payload or {
         "tr_id": 1,
         "target_stop_id": 1,
         "target_time_begin": (now + timedelta(seconds=720)).isoformat(),
@@ -125,7 +127,9 @@ if __name__ == "__main__":
     p.add_argument("--output", type=Path, default=OUTPUT / "benchmark.json")
     p.add_argument("--arrival-rate", type=float, default=20.0)
     p.add_argument("--requests", type=int, default=300)
+    p.add_argument("--payload", type=Path)
     args = p.parse_args()
     if args.arrival_rate <= 0 or args.requests < 2:
         p.error("arrival-rate must be positive and requests must be at least 2")
-    run(args.url, args.output, args.arrival_rate, args.requests)
+    payload = json.loads(args.payload.read_text()) if args.payload else None
+    run(args.url, args.output, args.arrival_rate, args.requests, payload)

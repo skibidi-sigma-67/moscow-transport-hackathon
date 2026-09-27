@@ -4,9 +4,33 @@ from datetime import UTC
 
 import numpy as np
 
-from ml.motion import motion
-
 FEATURE_VERSION = 5
+SUPPORTED_FEATURES = {
+    "cur_dev_s",
+    "horizon_s",
+    "hour_sin",
+    "hour_cos",
+    "gps_age_s",
+    "cur_dev_zero",
+    "cur_dev_per_horizon",
+    "speed_change",
+    "vehicle",
+    "last_speed",
+    "longitude",
+    "latitude",
+} | {
+    f"{name}_{window}"
+    for name, windows in (
+        ("speed_mean", (60, 180, 300, 900)),
+        ("speed_std", (60, 180, 300, 900)),
+        ("idle", (60, 180, 300, 900)),
+        ("coverage", (60, 180, 300, 900)),
+        ("distance", (180, 900)),
+        ("effective_speed", (180, 900)),
+        ("speed_max", (180, 900)),
+    )
+    for window in windows
+}
 
 
 def timestamp(value):
@@ -124,18 +148,4 @@ def features(request, names=None):
     result["last_speed"] = rows[-1][3] if rows else np.nan
     result["longitude"] = rows[-1][1] if rows else np.nan
     result["latitude"] = rows[-1][2] if rows else np.nan
-    if names is None or any(
-        c.startswith(
-            (
-                "time_",
-                "safe_",
-                "current_stop",
-                "since_moving",
-                "stop_count",
-                "gps_jumps",
-            )
-        )
-        for c in names
-    ):
-        result.update(motion(rows, now))
     return result

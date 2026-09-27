@@ -2,17 +2,9 @@ import itertools
 import math
 from dataclasses import dataclass
 
+from ml.schedule import Observation, clean, distance
+
 FEATURE_VERSION = "v1"
-
-
-@dataclass(frozen=True)
-class Observation:
-    time: float
-    lon: float
-    lat: float
-    speed: float
-    heading: float = 0.0
-    valid: bool = True
 
 
 @dataclass(frozen=True)
@@ -21,36 +13,6 @@ class Stop:
     lon: float
     lat: float
     stop_id: int
-
-
-def distance(a, b):
-    if not all(math.isfinite(v) for v in (*a, *b)):
-        return math.nan
-    lat1, lat2 = math.radians(a[1]), math.radians(b[1])
-    h = (
-        math.sin((lat2 - lat1) / 2) ** 2
-        + math.cos(lat1) * math.cos(lat2) * math.sin(math.radians(b[0] - a[0]) / 2) ** 2
-    )
-    return 6371000 * 2 * math.asin(min(1, math.sqrt(max(0, h))))
-
-
-def clean(history, now):
-    rows = sorted(
-        (p for p in history if now - 900 <= p.time <= now),
-        key=lambda p: (p.time, p.valid, str(p)),
-    )
-    dedup = {p.time: p for p in rows}
-    return [
-        p
-        for p in dedup.values()
-        if p.valid
-        and all(math.isfinite(v) for v in (p.lon, p.lat, p.speed, p.heading))
-        and -180 <= p.lon <= 180
-        and -90 <= p.lat <= 90
-        and p.lon != 0
-        and p.lat != 0
-        and 0 <= p.speed <= 130
-    ]
 
 
 def select_target(stops, now):

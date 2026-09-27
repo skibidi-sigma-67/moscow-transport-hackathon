@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,6 +13,7 @@ class AppSettings(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8001
     model_dir: str = str(Path(__file__).resolve().parents[2] / "artifacts")
+    strategy: Literal["baseline", "schedule_ensemble"] = "baseline"
 
 
 class Settings(BaseSettings):

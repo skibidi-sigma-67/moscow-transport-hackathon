@@ -10,7 +10,7 @@ router = APIRouter()
 def health(request: Request):
     return {
         "status": "ok",
-        "model": request.app.state.predictor.meta["model_version"],
+        "model": request.app.state.predictor.model_version,
     }
 
 

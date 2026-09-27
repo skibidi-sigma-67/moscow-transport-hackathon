@@ -11,7 +11,7 @@ from ml.settings import get_settings
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
-    app.state.predictor = Predictor(settings.app.model_dir)
+    app.state.predictor = Predictor(settings.app.model_dir, settings.app.strategy)
     app.state.settings = settings
 
     yield

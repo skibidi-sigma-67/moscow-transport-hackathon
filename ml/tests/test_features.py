@@ -1,5 +1,8 @@
+from datetime import datetime, timedelta
+
 import numpy as np
-from ml.features import features
+from ml.features import SUPPORTED_FEATURES, features
+from ml.schedule import ScheduleCatalog, schedule_features
 from test_api import payload
 
 from commons.contracts.v1.ml.requests import MLPredictionRequest
@@ -27,7 +30,7 @@ def test_future_invalid_and_duplicate_points_do_not_change_features():
         )
 
 
-def test_empty_telemetry_has_missing_motion_and_finite_hint():
+def test_empty_telemetry_has_missing_speed_and_finite_hint():
     data = payload()
     data["recent_telemetry"] = []
     values = features(MLPredictionRequest.model_validate(data))
@@ -36,38 +39,11 @@ def test_empty_telemetry_has_missing_motion_and_finite_hint():
     assert np.isnan(values["idle_900"])
 
 
-def test_time_weighted_motion_ignores_gaps_and_gps_jumps():
-    from datetime import datetime, timedelta
-
-    data = payload()
-    point = data["recent_telemetry"][0]
-    now = datetime.fromisoformat(data["current_time_T"])
-    data["recent_telemetry"] = [
-        dict(
-            point,
-            timestamp=(now - timedelta(seconds=age)).isoformat(),
-            speed=speed,
-            longitude=longitude,
-        )
-        for age, speed, longitude in [
-            (100, 0, 37),
-            (30, 0, 37),
-            (10, 20, 38),
-            (0, 20, 38),
-        ]
-    ]
-    values = features(MLPredictionRequest.model_validate(data))
-    assert values["time_coverage_900"] == 30 / 900
-    assert values["time_idle_900"] == 20 / 30
-    assert values["time_speed_900"] == 200 / 30
-    assert values["gps_jumps_900"] == 1
-    assert values["safe_distance_900"] == 0
-
-
 def test_selected_features_match_full_computation():
     request = MLPredictionRequest.model_validate(payload())
     full = features(request)
-    names = ["cur_dev_s", "time_idle_180", "safe_speed_900", "current_stop_s"]
+    assert set(full) == SUPPORTED_FEATURES
+    names = ["cur_dev_s", "idle_180", "distance_900", "longitude"]
     selected = features(request, names)
     for name in names:
         assert (
@@ -75,3 +51,31 @@ def test_selected_features_match_full_computation():
             or np.isnan(selected[name])
             and np.isnan(full[name])
         )
+
+
+def test_schedule_features_require_matching_target(tmp_path):
+    data = payload()
+    now = datetime.fromisoformat(data["current_time_T"])
+    path = tmp_path / "schedule_plan.csv"
+    path.write_text(
+        "tr_id,tt_action_item_id,time_begin,geom\n"
+        f"1,2,{(now + timedelta(seconds=660)).isoformat()},\n"
+        f"1,1,{data['target_time_begin']},POINT (37.2 55.2)\n"
+        f"1,1,{(now + timedelta(days=1)).isoformat()},POINT (37.3 55.3)\n"
+    )
+    request = MLPredictionRequest.model_validate(data)
+    catalog = ScheduleCatalog(path)
+    matched = catalog.resolve(request)
+    assert matched is not None
+    result = schedule_features(request, *matched)
+    assert result["stops_ahead"] == 2
+    assert np.isfinite(result["target_east_m"])
+    changed = request.model_copy(
+        update={"target_time_begin": request.target_time_begin + timedelta(seconds=1)}
+    )
+    assert catalog.resolve(changed) is None
+    path.write_text(
+        path.read_text()
+        + f"1,1,{data['target_time_begin']},POINT (37.4 55.4)\n"
+    )
+    assert ScheduleCatalog(path).resolve(request) is None

@@ -10,13 +10,14 @@ COPY backend/pyproject.toml backend/pyproject.toml
 COPY ml/pyproject.toml ml/pyproject.toml
 COPY ml/src/ ml/src/
 
-ENV OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 UV_COMPILE_BYTECODE=1 APP__MODEL_DIR=/app/ml/artifacts
+ENV OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 UV_COMPILE_BYTECODE=1 PYTHONDONTWRITEBYTECODE=1 APP__MODEL_DIR=/app/ml/artifacts APP__STRATEGY=schedule_ensemble
 
 RUN uv sync --locked --no-dev --package ml
 
-COPY ml/artifacts/delay.cbm ml/artifacts/metadata.json ml/artifacts/
+RUN mkdir -p /app/ml/artifacts
 
 WORKDIR /app/ml
+USER 10001:10001
 EXPOSE 8001
 
 HEALTHCHECK --interval=10s --timeout=2s --start-period=30s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=1).read()"
