@@ -13,7 +13,7 @@ export const HEALTH_CHECK_INTERVAL_MS =
 
 export const API_TIMEOUT_MS = 10_000;
 export const UPLOAD_TIMEOUT_MS = 120_000;
-export const MAX_CSV_SIZE_BYTES = 10 * 1024 * 1024;
+export const MAX_CSV_SIZE_BYTES = 100 * 1024 * 1024;
 export const TOP_SEGMENTS_LIMIT = 5;
 export const MAP_DEFAULT_CENTER: [number, number] = [55.751244, 37.618423];
 export const MAP_DEFAULT_ZOOM = 11;

@@ -81,7 +81,7 @@ export async function uploadCsv(
     throw new Error('Выберите CSV-файл');
   }
   if (file.size === 0 || file.size > MAX_CSV_SIZE_BYTES) {
-    throw new Error('Размер CSV-файла должен быть от 1 байта до 10 МБ');
+    throw new Error('Размер CSV-файла должен быть от 1 байта до 100 МБ');
   }
 
   const body = new FormData();
