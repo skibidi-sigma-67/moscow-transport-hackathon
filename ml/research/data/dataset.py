@@ -92,7 +92,7 @@ def load(root, split, policy="event", include_sequence=True):
                 "start_time": datetime.fromtimestamp(r.now - 900, UTC),
                 "end_time": datetime.fromtimestamp(r.now, UTC),
                 "recent_points": telemetry,
-            }
+            },
         )
         xs.append(features(request))
         if include_sequence:

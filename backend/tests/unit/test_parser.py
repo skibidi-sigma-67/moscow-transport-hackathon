@@ -92,5 +92,7 @@ def test_parse_realtime_cells_empty():
 
 
 def test_parse_realtime_cells_unknown_cell():
-    point = NdtpParser.parse_realtime_cells(b"\xff\x00\x00\x00", packet_time=datetime.now(UTC))
+    point = NdtpParser.parse_realtime_cells(
+        b"\xff\x00\x00\x00", packet_time=datetime.now(UTC)
+    )
     assert point is None

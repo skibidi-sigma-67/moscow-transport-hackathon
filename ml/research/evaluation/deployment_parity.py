@@ -70,7 +70,7 @@ def requests(root):
                     "start_time": now - timedelta(seconds=900),
                     "end_time": now,
                     "recent_points": telemetry,
-                }
+                },
             ),
         )
 
