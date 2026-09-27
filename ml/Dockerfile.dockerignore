@@ -1,0 +1,17 @@
+*
+!pyproject.toml
+!uv.lock
+!backend/
+!backend/pyproject.toml
+!libs/
+!libs/commons/
+!libs/commons/pyproject.toml
+!libs/commons/src/
+!libs/commons/src/**
+!ml/
+!ml/pyproject.toml
+!ml/src/
+!ml/src/**
+**/__pycache__/
+**/*.pyc
+**/.DS_Store
