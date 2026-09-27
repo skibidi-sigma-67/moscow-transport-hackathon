@@ -6,12 +6,13 @@ from fastapi import FastAPI
 
 from backend.api.v1.router import v1_router
 from backend.database.engine import create_engine, create_session_maker
-from backend.modules.predictions.worker import PredictionWorker
-from backend.modules.telemetry.repository import TelemetryRedisRepository
-from backend.modules.telemetry.service import TelemetryService
 from backend.modules.dashboard.service import DashboardService
 from backend.modules.dashboard.websocket_pool import WebsocketConnectionPool
 from backend.modules.dashboard.worker import DashboardWorker
+from backend.modules.ml.service import MLService
+from backend.modules.predictions.worker import PredictionWorker
+from backend.modules.telemetry.repository import TelemetryRedisRepository
+from backend.modules.telemetry.service import TelemetryService
 from backend.ndtp.server import NdtpServer
 from backend.redis.client import create_redis_pool
 from backend.settings import get_settings
@@ -37,11 +38,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings=settings,
     )
 
+    ml_service = MLService(settings)
+    app.state.ml_service = ml_service
+
     prediction_worker = PredictionWorker(
         name="ml_predictions",
         redis_client=app.state.redis_client,
         session_maker=app.state.session_maker,
         settings=settings,
+        ml_service=app.state.ml_service,
         target_cycle_time_s=30.0,
     )
 
@@ -49,7 +54,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     telemetry_repo = TelemetryRedisRepository(app.state.redis_client, settings)
     telemetry_service = TelemetryService(telemetry_repo)
     dashboard_service = DashboardService(app.state.redis_client, telemetry_service)
-    
+
     dashboard_worker = DashboardWorker(
         name="dashboard_websocket",
         service=dashboard_service,

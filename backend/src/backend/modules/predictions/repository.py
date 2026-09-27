@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from commons.enums import RiskLevel
+from commons.enums import IncidentPattern, PredictionStatus, RiskLevel
 
 from .models import PredictionLog
 
@@ -14,16 +14,16 @@ class PredictionRepository:
         tr_id: int,
         predicted_delay_s: float,
         risk_level: RiskLevel,
-        pattern_reason: str | None = None,
-        status: str = "OK",
+        pattern_reason: IncidentPattern | None = None,
+        status: PredictionStatus = PredictionStatus.OK,
         error_text: str | None = None,
     ) -> PredictionLog:
         log = PredictionLog(
             tr_id=tr_id,
             predicted_delay_s=predicted_delay_s,
             risk_level=risk_level.value,
-            pattern_reason=pattern_reason,
-            status=status,
+            pattern_reason=pattern_reason.value if pattern_reason else None,
+            status=status.value,
             error_text=error_text,
         )
 
