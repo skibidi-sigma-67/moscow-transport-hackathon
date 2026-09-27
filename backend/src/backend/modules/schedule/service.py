@@ -64,6 +64,8 @@ class ScheduleService:
             if not time_begin_str:
                 continue
 
+            time_begin_str = re.sub(r"(\.\d{6})\d+", r"\g<1>", time_begin_str)
+
             try:
                 time_begin = datetime.strptime(
                     time_begin_str, "%Y-%m-%d %H:%M:%S"
