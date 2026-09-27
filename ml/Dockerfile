@@ -1,25 +1,32 @@
 FROM python:3.12-slim-bookworm
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.19 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
+ENV PATH="/app/.venv/bin:$PATH" \
+    UV_COMPILE_BYTECODE=1 \
+    OMP_NUM_THREADS=1 \
+    APP__STRATEGY=schedule_ensemble
+
 COPY pyproject.toml uv.lock ./
-COPY libs/commons/pyproject.toml libs/commons/pyproject.toml
+COPY libs/commons/pyproject.toml libs/commons/
+COPY backend/pyproject.toml backend/
+COPY ml/pyproject.toml ml/
+
+RUN uv sync --frozen --no-dev --package ml --no-install-project
+
 COPY libs/commons/src/ libs/commons/src/
-COPY backend/pyproject.toml backend/pyproject.toml
-COPY ml/pyproject.toml ml/pyproject.toml
 COPY ml/src/ ml/src/
 
-ENV OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 UV_COMPILE_BYTECODE=1 PYTHONDONTWRITEBYTECODE=1 APP__MODEL_DIR=/app/ml/artifacts APP__STRATEGY=schedule_ensemble
+ARG APP_USER_ID=10001
+ARG APP_PORT=8001
 
-RUN uv sync --locked --no-dev --package ml
-
-RUN mkdir -p /app/ml/artifacts
+RUN uv sync --frozen --no-dev --package ml && mkdir -p ml/artifacts && chown -R ${APP_USER_ID}:${APP_USER_ID} ml/artifacts
 
 WORKDIR /app/ml
-USER 10001:10001
-EXPOSE 8001
+USER ${APP_USER_ID}:${APP_USER_ID}
+EXPOSE ${APP_PORT}
 
-HEALTHCHECK --interval=10s --timeout=2s --start-period=30s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=1).read()"
+HEALTHCHECK --interval=10s --timeout=2s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=1)"
 
-CMD ["/app/.venv/bin/python", "-m", "ml.main"]
+CMD ["python", "-m", "ml.main"]

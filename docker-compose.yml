@@ -4,15 +4,15 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: transport
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -20,7 +20,7 @@ services:
   redis:
     image: redis:alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -32,9 +32,16 @@ services:
       context: .
       dockerfile: ml/Dockerfile
     ports:
-      - "8001:8001"
+      - "${ML_PORT}:8001"
     environment:
-      APP__WORKERS: 1
+      APP__TITLE: ${ML_TITLE}
+      APP__VERSION: ${ML_VERSION}
+      APP__DEBUG: ${ML_DEBUG}
+      APP__HOST: ${ML_HOST}
+      APP__PORT: 8001
+      APP__WORKERS: ${ML_WORKERS}
+      APP__MODEL_DIR: ${ML_MODEL_DIR}
+      APP__STRATEGY: ${ML_STRATEGY}
     volumes:
       - ./ml/artifacts:/app/ml/artifacts
 
@@ -43,12 +50,35 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "8000:8000"
-      - "9201:9201"
+      - "${BACKEND_PORT}:8000"
+      - "${BACKEND_NDTP_PORT}:9201"
     environment:
+      APP__TITLE: ${BACKEND_TITLE}
+      APP__DEBUG: ${BACKEND_DEBUG}
+      APP__HOST: ${BACKEND_HOST}
+      APP__PORT: 8000
+      APP__PREDICTION_CACHE_TTL: ${BACKEND_PREDICTION_CACHE_TTL}
+      APP__TELEMETRY_MAX_HISTORY: ${BACKEND_TELEMETRY_MAX_HISTORY}
+      APP__STOP_SPEED_THRESHOLD_KMH: ${BACKEND_STOP_SPEED_THRESHOLD_KMH}
+      APP__ML_TELEMETRY_WINDOW_MINUTES: ${BACKEND_ML_TELEMETRY_WINDOW_MINUTES}
+      APP__MAX_IDLE_GAP_S: ${BACKEND_MAX_IDLE_GAP_S}
+      APP__HISTORICAL_PACKET_DELAY_S: ${BACKEND_HISTORICAL_PACKET_DELAY_S}
+      
+      NDTP__HOST: ${BACKEND_NDTP_HOST}
+      NDTP__PORT: 9201
+      
       DATABASE__HOST: db
+      DATABASE__PORT: 5432
+      DATABASE__USERNAME: ${DB_USER}
+      DATABASE__PASSWORD: ${DB_PASSWORD}
+      DATABASE__DATABASE: ${DB_NAME}
+      
       REDIS__HOST: redis
+      REDIS__PORT: 6379
+      
       ML__BASE_URL: http://ml:8001
+      ML__TIMEOUT: ${BACKEND_ML_TIMEOUT}
+    command: sh -c "alembic upgrade head && python -m backend.main"
     depends_on:
       db:
         condition: service_healthy
@@ -61,8 +91,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+        VITE_YANDEX_MAP_API_KEY: ${VITE_YANDEX_MAP_API_KEY}
+        VITE_HEALTH_CHECK_INTERVAL: ${VITE_HEALTH_CHECK_INTERVAL}
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT}:80"
     depends_on:
       backend:
         condition: service_healthy
