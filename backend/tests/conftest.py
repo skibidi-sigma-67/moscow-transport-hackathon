@@ -5,8 +5,8 @@ import pytest_asyncio
 import redis.asyncio as redis
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from testcontainers.postgres import PostgresContainer
-from testcontainers.redis import RedisContainer
+from testcontainers.community.postgres import PostgresContainer
+from testcontainers.community.redis import RedisContainer
 
 from backend.api.dependencies import get_database_session, get_redis_client
 from backend.bootstrap import create_app

@@ -47,6 +47,15 @@ class ScheduleRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_stop_times(self, tr_id: int) -> list[float]:
+        stmt = (
+            select(SchedulePlan.time_begin)
+            .where(SchedulePlan.tr_id == tr_id)
+            .order_by(SchedulePlan.time_begin.asc())
+        )
+        result = await self.session.execute(stmt)
+        return [row.timestamp() for row in result.scalars().all()]
+
     async def clear(self) -> None:
         stmt = delete(SchedulePlan)
         await self.session.execute(stmt)

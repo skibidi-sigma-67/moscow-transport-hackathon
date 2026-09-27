@@ -53,7 +53,8 @@ def test_parse_realtime_cells_success():
 
     full_data = cell_type_data + bytes(data_block)
 
-    point = NdtpParser.parse_realtime_cells(full_data)
+    packet_time = datetime.now(UTC)
+    point = NdtpParser.parse_realtime_cells(full_data, packet_time=packet_time)
 
     assert point is not None
     assert isinstance(point, TelemetryPointDto)
@@ -77,7 +78,8 @@ def test_parse_realtime_cells_south_west():
 
     full_data = cell_type_data + bytes(data_block)
 
-    point = NdtpParser.parse_realtime_cells(full_data)
+    packet_time = datetime.now(UTC)
+    point = NdtpParser.parse_realtime_cells(full_data, packet_time=packet_time)
 
     assert point is not None
     assert point.longitude == pytest.approx(-37.6173)
@@ -85,10 +87,10 @@ def test_parse_realtime_cells_south_west():
 
 
 def test_parse_realtime_cells_empty():
-    point = NdtpParser.parse_realtime_cells(b"")
+    point = NdtpParser.parse_realtime_cells(b"", packet_time=datetime.now(UTC))
     assert point is None
 
 
 def test_parse_realtime_cells_unknown_cell():
-    point = NdtpParser.parse_realtime_cells(b"\xff\x00\x00\x00")
+    point = NdtpParser.parse_realtime_cells(b"\xff\x00\x00\x00", packet_time=datetime.now(UTC))
     assert point is None

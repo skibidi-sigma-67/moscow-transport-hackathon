@@ -60,23 +60,27 @@ def payload():
         "current_time_T": now.isoformat(),
         "target_time_begin": (now + timedelta(seconds=720)).isoformat(),
         "cur_dev_s": -40,
-        "segment_avg_speed": 20,
-        "idle_time_s": 0,
-        "coverage_ratio": 0.1,
-        "window_start_time": (now - timedelta(seconds=900)).isoformat(),
-        "window_end_time": now.isoformat(),
-        "recent_telemetry": [
-            {
-                "timestamp": now.isoformat(),
-                "packet_time": now.isoformat(),
-                "longitude": 37,
-                "latitude": 55,
-                "speed": 20,
-                "course": 90,
-                "location_valid": True,
-                "is_historical": False,
-            }
-        ],
+        "aggregates": {
+            "segment_avg_speed": 20,
+            "idle_time_s": 0,
+            "coverage_ratio": 0.1,
+        },
+        "window": {
+            "start_time": (now - timedelta(seconds=900)).isoformat(),
+            "end_time": now.isoformat(),
+            "recent_points": [
+                {
+                    "timestamp": now.isoformat(),
+                    "packet_time": now.isoformat(),
+                    "longitude": 37,
+                    "latitude": 55,
+                    "speed": 20,
+                    "course": 90,
+                    "location_valid": True,
+                    "is_historical": False,
+                }
+            ],
+        },
     }
 
 
@@ -97,22 +101,22 @@ def test_api_contract_and_validation(client):
     data["target_time_begin"] = data["current_time_T"]
     assert client.post("/predict", json=data).status_code == 422
     data = payload()
-    del data["coverage_ratio"]
+    del data["aggregates"]["coverage_ratio"]
     assert client.post("/predict", json=data).status_code == 422
 
 
 def test_prediction_survives_missing_history_and_reconnect(client):
     data = payload()
-    data["recent_telemetry"][0]["is_historical"] = True
+    data["window"]["recent_points"][0]["is_historical"] = True
     result = client.post("/predict", json=data)
     assert result.status_code == 200
     assert result.json()["status"] == PredictionStatus.DEGRADED
-    data["recent_telemetry"] = []
+    data["window"]["recent_points"] = []
     result = client.post("/predict", json=data)
     assert result.status_code == 200
     assert result.json()["status"] == PredictionStatus.DEGRADED
     data = payload()
-    data["recent_telemetry"][0]["timestamp"] = (
+    data["window"]["recent_points"][0]["timestamp"] = (
         datetime.fromisoformat(data["current_time_T"]) - timedelta(seconds=60)
     ).isoformat()
     result = client.post("/predict", json=data)
@@ -131,8 +135,8 @@ def test_pattern_reason_uses_current_movement(client, monkeypatch):
 
     data = payload()
     now = datetime.fromisoformat(data["current_time_T"])
-    point = data["recent_telemetry"][0]
-    data["recent_telemetry"] = [
+    point = data["window"]["recent_points"][0]
+    data["window"]["recent_points"] = [
         dict(
             point,
             timestamp=(now - timedelta(seconds=15 * i)).isoformat(),
@@ -143,6 +147,6 @@ def test_pattern_reason_uses_current_movement(client, monkeypatch):
     result = client.post("/predict", json=data)
     assert result.json()["pattern_reason"] == IncidentPattern.TRAFFIC_JAM
 
-    data["recent_telemetry"] = []
+    data["window"]["recent_points"] = []
     result = client.post("/predict", json=data)
     assert result.json()["pattern_reason"] == IncidentPattern.UNKNOWN_DELAY

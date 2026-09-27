@@ -22,26 +22,30 @@ def payload(count=60):
         "current_time_T": now.isoformat(),
         "target_time_begin": (now + timedelta(seconds=720)).isoformat(),
         "cur_dev_s": 20,
-        "segment_avg_speed": 20,
-        "idle_time_s": 0,
-        "coverage_ratio": 1,
-        "window_start_time": (now - timedelta(seconds=900)).isoformat(),
-        "window_end_time": now.isoformat(),
-        "recent_telemetry": [
-            {
-                "timestamp": (
-                    now - timedelta(seconds=900 * i / max(1, count))
-                ).isoformat(),
-                "packet_time": now.isoformat(),
-                "longitude": 37 + 0.00001 * i,
-                "latitude": 55,
-                "speed": 20,
-                "course": 90,
-                "location_valid": True,
-                "is_historical": False,
-            }
-            for i in range(count)
-        ],
+        "aggregates": {
+            "segment_avg_speed": 20,
+            "idle_time_s": 0,
+            "coverage_ratio": 1,
+        },
+        "window": {
+            "start_time": (now - timedelta(seconds=900)).isoformat(),
+            "end_time": now.isoformat(),
+            "recent_points": [
+                {
+                    "timestamp": (
+                        now - timedelta(seconds=900 * i / max(1, count))
+                    ).isoformat(),
+                    "packet_time": now.isoformat(),
+                    "longitude": 37 + 0.00001 * i,
+                    "latitude": 55,
+                    "speed": 20,
+                    "course": 90,
+                    "location_valid": True,
+                    "is_historical": False,
+                }
+                for i in range(count)
+            ],
+        },
     }
 
 

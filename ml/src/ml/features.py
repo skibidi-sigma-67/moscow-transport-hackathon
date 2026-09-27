@@ -39,10 +39,10 @@ def timestamp(value):
 
 def history(request):
     now = timestamp(request.current_time_T)
-    start = max(now - 900, timestamp(request.window_start_time))
-    end = min(now, timestamp(request.window_end_time))
+    start = max(now - 900, timestamp(request.window.start_time))
+    end = min(now, timestamp(request.window.end_time))
     rows = {}
-    for p in request.recent_telemetry:
+    for p in request.window.recent_points:
         t = timestamp(p.timestamp)
         if not start <= t <= end or timestamp(p.packet_time) > now:
             continue
@@ -73,8 +73,8 @@ def features(request, names=None):
     if not 600 < horizon <= 900:
         raise ValueError("Target must be in (T + 600, T + 900] seconds")
     start, end = (
-        timestamp(request.window_start_time),
-        timestamp(request.window_end_time),
+        timestamp(request.window.start_time),
+        timestamp(request.window.end_time),
     )
     if not start <= end <= now:
         raise ValueError("Invalid telemetry window")
@@ -82,16 +82,16 @@ def features(request, names=None):
         math.isfinite(v)
         for v in (
             request.cur_dev_s,
-            request.segment_avg_speed,
-            request.idle_time_s,
-            request.coverage_ratio,
+            request.aggregates.segment_avg_speed,
+            request.aggregates.idle_time_s,
+            request.aggregates.coverage_ratio,
         )
     ):
         raise ValueError("Non-finite request aggregates")
     if (
-        request.segment_avg_speed < 0
-        or request.idle_time_s < 0
-        or not 0 <= request.coverage_ratio <= 1
+        request.aggregates.segment_avg_speed < 0
+        or request.aggregates.idle_time_s < 0
+        or not 0 <= request.aggregates.coverage_ratio <= 1
     ):
         raise ValueError("Invalid request aggregates")
     rows = history(request)

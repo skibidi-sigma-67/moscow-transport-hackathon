@@ -18,6 +18,36 @@ class TelemetryPoint(FrozenModel):
     )
 
 
+class RouteFeatures(FrozenModel):
+    cur_dev_missing: float = Field(..., description="Признак отсутствия исторического отклонения")
+    horizon_s: float = Field(..., description="Горизонт предсказания в секундах (разница между плановым прибытием и текущим временем)")
+    hour_sin: float = Field(..., description="Синус текущего времени суток (для учета цикличности)")
+    hour_cos: float = Field(..., description="Косинус текущего времени суток (для учета цикличности)")
+    stops_ahead: float = Field(..., description="Количество остановок до целевой остановки")
+    target_lon: float = Field(..., description="Долгота целевой остановки")
+    target_lat: float = Field(..., description="Широта целевой остановки")
+    distance_target_m: float = Field(..., description="Дистанция до целевой остановки по прямой (в метрах)")
+    gps_age_s: float = Field(..., description="Возраст последней валидной GPS-отметки в секундах")
+    last_lon: float = Field(..., description="Долгота из последней валидной отметки")
+    last_lat: float = Field(..., description="Широта из последней валидной отметки")
+    last_speed: float = Field(..., description="Скорость из последней валидной отметки")
+    heading_alignment: float = Field(..., description="Согласованность текущего курса и направления на цель (косинус разницы углов)")
+    target_east_m: float = Field(..., description="Смещение до цели по оси Восток (в метрах)")
+    target_north_m: float = Field(..., description="Смещение до цели по оси Север (в метрах)")
+
+
+class TelemetryAggregates(FrozenModel):
+    segment_avg_speed: float = Field(..., description="Средняя скорость на текущем сегменте (км/ч)")
+    idle_time_s: float = Field(..., description="Время простоя на светофорах/в пробках (в секундах)")
+    coverage_ratio: float = Field(..., description="Отношение фактического кол-ва точек к ожидаемому")
+
+
+class TelemetryWindow(FrozenModel):
+    start_time: datetime = Field(..., description="Начало временного окна телеметрии")
+    end_time: datetime = Field(..., description="Конец временного окна телеметрии")
+    recent_points: list[TelemetryPoint] = Field(..., description="Последние телеметрические отметки (история)")
+
+
 class MLPredictionRequest(FrozenModel):
     tr_id: int = Field(..., description="Идентификатор транспортного средства")
     target_stop_id: int = Field(..., description="Идентификатор целевой остановки")
@@ -28,21 +58,8 @@ class MLPredictionRequest(FrozenModel):
     cur_dev_s: float = Field(
         ..., description="Текущее фактическое отклонение от расписания (в секундах)"
     )
-    segment_avg_speed: float = Field(
-        ..., description="Средняя скорость на текущем сегменте (км/ч)"
-    )
-    idle_time_s: float = Field(
-        ..., description="Время простоя на светофорах/в пробках (в секундах)"
-    )
-    window_start_time: datetime = Field(
-        ..., description="Начало временного окна телеметрии"
-    )
-    window_end_time: datetime = Field(
-        ..., description="Конец временного окна телеметрии"
-    )
-    coverage_ratio: float = Field(
-        ..., description="Отношение фактического кол-ва точек к ожидаемому"
-    )
-    recent_telemetry: list[TelemetryPoint] = Field(
-        ..., description="Последние телеметрические отметки (история)"
+    aggregates: TelemetryAggregates = Field(..., description="Агрегированные показатели")
+    window: TelemetryWindow = Field(..., description="Окно телеметрии и точки")
+    route_features: RouteFeatures | None = Field(
+        default=None, description="Прекомпилированные фичи маршрута (из расписания)"
     )

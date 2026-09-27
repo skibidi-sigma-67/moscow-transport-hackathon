@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 from catboost import CatBoostRegressor
 
+from commons.contracts.v1.ml.requests import RouteFeatures
 from commons.contracts.v1.ml.responses import MLPredictionResponse
 from commons.enums import IncidentPattern, PredictionStatus, RiskLevel
 from ml.features import FEATURE_VERSION, SUPPORTED_FEATURES, features, timestamp
-from ml.schedule import ROUTE_FEATURES, ScheduleCatalog, schedule_features
 
 FRESHNESS_SECONDS = 30
 ENSEMBLE_WEIGHTS = {
@@ -19,7 +19,6 @@ ENSEMBLE_WEIGHTS = {
 ENSEMBLE_FILES = {
     "delay.cbm",
     "metadata.json",
-    "schedule_plan.csv",
 } | {
     f"{name}/{filename}"
     for name in ENSEMBLE_WEIGHTS
@@ -57,7 +56,6 @@ class Predictor:
             "idle_180",
             "coverage_180",
         }
-        self.catalog = None
         self.ensemble = ()
         self.model_version = self.meta["model_version"]
         if strategy == "schedule_ensemble":
@@ -71,13 +69,12 @@ class Predictor:
                 digest = hashlib.sha256((directory / relative).read_bytes()).hexdigest()
                 if digest != expected:
                     raise ValueError(f"Deployment file checksum mismatch: {relative}")
-            self.catalog = ScheduleCatalog(directory / "schedule_plan.csv")
             components = []
             for name, weight in ENSEMBLE_WEIGHTS.items():
                 metadata = json.loads((directory / name / "metadata.json").read_text())
                 columns = metadata["features"]
                 if not metadata.get("offline_only") or not set(columns).issubset(
-                    ROUTE_FEATURES
+                    set(RouteFeatures.model_fields.keys())
                 ):
                     raise ValueError(f"Incompatible ensemble component: {name}")
                 model = CatBoostRegressor()
@@ -97,11 +94,12 @@ class Predictor:
 
     def predict(self, request):
         values = features(request, self.feature_names)
-        matched = None if self.catalog is None else self.catalog.resolve(request)
-        if matched is None:
+        if request.route_features is None:
             delay = self._baseline_delay(request, values)
+            matched = False
         else:
-            route_values = schedule_features(request, *matched)
+            route_values = request.route_features.model_dump()
+            route_values["cur_dev_s"] = request.cur_dev_s
             delay = sum(
                 weight
                 * float(
@@ -112,9 +110,10 @@ class Predictor:
                 )
                 for model, columns, weight in self.ensemble
             )
+            matched = True
             if not np.isfinite(delay):
                 delay = self._baseline_delay(request, values)
-                matched = None
+                matched = False
         if not np.isfinite(delay):
             raise ValueError("Non-finite prediction")
         risk = (
@@ -131,7 +130,7 @@ class Predictor:
             and point.location_valid
             and timestamp(point.timestamp) == latest
             and timestamp(point.packet_time) <= now
-            for point in request.recent_telemetry
+            for point in request.window.recent_points
         )
         pattern = None
         if risk != RiskLevel.GREEN:
@@ -148,6 +147,6 @@ class Predictor:
             risk_level=risk,
             pattern_reason=pattern,
             status=PredictionStatus.OK
-            if live and (self.catalog is None or matched is not None)
+            if live and (not self.ensemble or matched)
             else PredictionStatus.DEGRADED,
         )

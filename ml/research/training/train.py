@@ -127,9 +127,12 @@ def run(root, out):
     y = p.target_delay_s.to_numpy()
     folds = splits(p)
     basic = ["cur_dev_s", "horizon_s", "hour_sin", "hour_cos"]
-    weighted = (
-        basic + ["gps_age_s", "cur_dev_zero", "cur_dev_per_horizon", "last_speed"]
-    )
+    weighted = basic + [
+        "gps_age_s",
+        "cur_dev_zero",
+        "cur_dev_per_horizon",
+        "last_speed",
+    ]
     experiments, predictions = [], []
     configs = [
         {"depth": d, "learning_rate": lr, "l2_leaf_reg": reg, "iterations": n}

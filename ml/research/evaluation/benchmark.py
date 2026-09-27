@@ -22,12 +22,15 @@ def run(
         "target_time_begin": (now + timedelta(seconds=720)).isoformat(),
         "current_time_T": now.isoformat(),
         "cur_dev_s": 0,
-        "segment_avg_speed": 20,
-        "idle_time_s": 0,
-        "coverage_ratio": 1,
-        "window_start_time": (now - timedelta(seconds=900)).isoformat(),
-        "window_end_time": now.isoformat(),
-        "recent_telemetry": [
+        "aggregates": {
+            "segment_avg_speed": 20,
+            "idle_time_s": 0,
+            "coverage_ratio": 1,
+        },
+        "window": {
+            "start_time": (now - timedelta(seconds=900)).isoformat(),
+            "end_time": now.isoformat(),
+            "recent_points": [
             {
                 "timestamp": (now - timedelta(seconds=15 * i)).isoformat(),
                 "longitude": 37.0,

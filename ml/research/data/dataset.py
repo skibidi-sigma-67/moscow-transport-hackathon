@@ -83,12 +83,16 @@ def load(root, split, policy="event", include_sequence=True):
             current_time_T=datetime.fromtimestamp(r.now, UTC),
             target_time_begin=datetime.fromtimestamp(r.target_time, UTC),
             cur_dev_s=r.cur_dev_s,
-            segment_avg_speed=0,
-            idle_time_s=0,
-            coverage_ratio=0,
-            window_start_time=datetime.fromtimestamp(r.now - 900, UTC),
-            window_end_time=datetime.fromtimestamp(r.now, UTC),
-            recent_telemetry=telemetry,
+            aggregates={
+                "segment_avg_speed": 0,
+                "idle_time_s": 0,
+                "coverage_ratio": 0,
+            },
+            window={
+                "start_time": datetime.fromtimestamp(r.now - 900, UTC),
+                "end_time": datetime.fromtimestamp(r.now, UTC),
+                "recent_points": telemetry,
+            }
         )
         xs.append(features(request))
         if include_sequence:

@@ -1,3 +1,5 @@
+import math
+from bisect import bisect_right
 from datetime import UTC, datetime, timedelta
 
 import redis.asyncio as redis
@@ -8,7 +10,13 @@ from backend.modules.schedule.service import ScheduleService
 from backend.modules.telemetry.service import TelemetryService
 from backend.settings import Settings
 from commons.contracts.v1.api.predictions import PredictionLogDto
-from commons.contracts.v1.ml.requests import MLPredictionRequest, TelemetryPoint
+from commons.contracts.v1.ml.requests import (
+    MLPredictionRequest,
+    RouteFeatures,
+    TelemetryAggregates,
+    TelemetryPoint,
+    TelemetryWindow,
+)
 from commons.enums import IncidentPattern, RiskLevel
 
 from .repository import PredictionRepository
@@ -114,18 +122,103 @@ class PredictionService:
         if not next_stop:
             raise ValueError(f"No upcoming stops in schedule for tr_id {tr_id}")
 
+        route_features = None
+        if next_stop.longitude is not None and next_stop.latitude is not None:
+            stop_times = await self.schedule.get_stop_times(tr_id)
+            now = current_time_t.timestamp()
+            target_time = next_stop.time_begin.timestamp()
+
+            valid_points = [
+                p
+                for p in window_points
+                if p.location_valid
+                and all(
+                    math.isfinite(v)
+                    for v in (p.longitude, p.latitude, float(p.speed), float(p.course))
+                )
+                and -180 <= p.longitude <= 180
+                and -90 <= p.latitude <= 90
+                and p.longitude != 0
+                and p.latitude != 0
+                and 0 <= float(p.speed) <= 130
+            ]
+
+            if valid_points:
+                latest = valid_points[-1]
+                lon = latest.longitude
+                lat = latest.latitude
+                speed = float(latest.speed)
+                heading = float(latest.course)
+                gps_age_s = now - latest.timestamp.timestamp()
+
+                lat1, lat2 = math.radians(lat), math.radians(next_stop.latitude)
+                h = (
+                    math.sin((lat2 - lat1) / 2) ** 2
+                    + math.cos(lat1)
+                    * math.cos(lat2)
+                    * math.sin(math.radians(next_stop.longitude - lon) / 2) ** 2
+                )
+                distance_target_m = (
+                    6371000 * 2 * math.asin(min(1, math.sqrt(max(0, h))))
+                )
+
+                east = (
+                    math.radians(next_stop.longitude - lon)
+                    * 6371000
+                    * math.cos(math.radians((lat + next_stop.latitude) / 2))
+                )
+                north = math.radians(next_stop.latitude - lat) * 6371000
+                bearing = math.degrees(math.atan2(east, north))
+
+                heading_alignment = math.cos(math.radians(bearing - heading))
+            else:
+                lon = math.nan
+                lat = math.nan
+                speed = math.nan
+                heading_alignment = math.nan
+                distance_target_m = math.nan
+                east = math.nan
+                north = math.nan
+                gps_age_s = 3600.0
+
+            route_features = RouteFeatures(
+                cur_dev_missing=0.0,
+                horizon_s=target_time - now,
+                hour_sin=math.sin(2 * math.pi * (now % 86400) / 86400),
+                hour_cos=math.cos(2 * math.pi * (now % 86400) / 86400),
+                stops_ahead=float(
+                    bisect_right(stop_times, target_time)
+                    - bisect_right(stop_times, now)
+                ),
+                target_lon=next_stop.longitude,
+                target_lat=next_stop.latitude,
+                distance_target_m=distance_target_m,
+                gps_age_s=gps_age_s,
+                last_lon=lon,
+                last_lat=lat,
+                last_speed=speed,
+                heading_alignment=heading_alignment,
+                target_east_m=east,
+                target_north_m=north,
+            )
+
         ml_request = MLPredictionRequest(
             tr_id=tr_id,
             target_stop_id=next_stop.stop_id,
             target_time_begin=next_stop.time_begin,
             current_time_T=current_time_t,
             cur_dev_s=cur_dev_s,
-            segment_avg_speed=segment_avg_speed,
-            idle_time_s=idle_time_s,
-            window_start_time=window_start,
-            window_end_time=window_end,
-            coverage_ratio=coverage_ratio,
-            recent_telemetry=telemetry_points,
+            aggregates=TelemetryAggregates(
+                segment_avg_speed=segment_avg_speed,
+                idle_time_s=idle_time_s,
+                coverage_ratio=coverage_ratio,
+            ),
+            window=TelemetryWindow(
+                start_time=window_start,
+                end_time=window_end,
+                recent_points=telemetry_points,
+            ),
+            route_features=route_features,
         )
 
         ml_resp, error_text = await self.ml_service.get_prediction(
@@ -152,10 +245,10 @@ class PredictionService:
             created_at=log.created_at,
         )
 
-        await self.redis.setex(
+        await self.redis.set(
             f"vehicle_prediction:{tr_id}",
-            self.settings.app.prediction_cache_ttl,
             dto.model_dump_json(),
+            ex=self.settings.app.prediction_cache_ttl,
         )
 
         return dto

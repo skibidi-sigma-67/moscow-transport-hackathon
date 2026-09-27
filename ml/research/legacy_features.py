@@ -2,7 +2,7 @@ import itertools
 import math
 from dataclasses import dataclass
 
-from ml.schedule import Observation, clean, distance
+from ml.schedule import clean, distance
 
 FEATURE_VERSION = "v1"
 

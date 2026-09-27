@@ -1,8 +1,5 @@
-from datetime import datetime, timedelta
-
 import numpy as np
 from ml.features import SUPPORTED_FEATURES, features
-from ml.schedule import ScheduleCatalog, schedule_features
 from test_api import payload
 
 from commons.contracts.v1.ml.requests import MLPredictionRequest
@@ -11,8 +8,8 @@ from commons.contracts.v1.ml.requests import MLPredictionRequest
 def test_future_invalid_and_duplicate_points_do_not_change_features():
     data = payload()
     original = MLPredictionRequest.model_validate(data)
-    point = data["recent_telemetry"][0]
-    data["recent_telemetry"] += [
+    point = data["window"]["recent_points"][0]
+    data["window"]["recent_points"] += [
         point,
         dict(point, timestamp="2026-01-06T12:01:00Z"),
         dict(point, location_valid=False),
@@ -32,7 +29,7 @@ def test_future_invalid_and_duplicate_points_do_not_change_features():
 
 def test_empty_telemetry_has_missing_speed_and_finite_hint():
     data = payload()
-    data["recent_telemetry"] = []
+    data["window"]["recent_points"] = []
     values = features(MLPredictionRequest.model_validate(data))
     assert values["cur_dev_s"] == -40
     assert values["coverage_900"] == 0
@@ -51,31 +48,3 @@ def test_selected_features_match_full_computation():
             or np.isnan(selected[name])
             and np.isnan(full[name])
         )
-
-
-def test_schedule_features_require_matching_target(tmp_path):
-    data = payload()
-    now = datetime.fromisoformat(data["current_time_T"])
-    path = tmp_path / "schedule_plan.csv"
-    path.write_text(
-        "tr_id,tt_action_item_id,time_begin,geom\n"
-        f"1,2,{(now + timedelta(seconds=660)).isoformat()},\n"
-        f"1,1,{data['target_time_begin']},POINT (37.2 55.2)\n"
-        f"1,1,{(now + timedelta(days=1)).isoformat()},POINT (37.3 55.3)\n"
-    )
-    request = MLPredictionRequest.model_validate(data)
-    catalog = ScheduleCatalog(path)
-    matched = catalog.resolve(request)
-    assert matched is not None
-    result = schedule_features(request, *matched)
-    assert result["stops_ahead"] == 2
-    assert np.isfinite(result["target_east_m"])
-    changed = request.model_copy(
-        update={"target_time_begin": request.target_time_begin + timedelta(seconds=1)}
-    )
-    assert catalog.resolve(changed) is None
-    path.write_text(
-        path.read_text()
-        + f"1,1,{data['target_time_begin']},POINT (37.4 55.4)\n"
-    )
-    assert ScheduleCatalog(path).resolve(request) is None

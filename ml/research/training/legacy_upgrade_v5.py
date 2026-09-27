@@ -222,7 +222,9 @@ if __name__ == "__main__":
     parser.add_argument("--previous", type=Path, default=OUTPUT / "legacy-upgrade-v3")
     parser.add_argument("--output", type=Path, default=OUTPUT / "legacy-upgrade-v5")
     parser.add_argument(
-        "--report", type=Path, default=Path(__file__).resolve().parents[2] / "reports/v5.json"
+        "--report",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "reports/v5.json",
     )
     args = parser.parse_args()
     run(args.dataset, args.winner, args.previous, args.output, args.report)

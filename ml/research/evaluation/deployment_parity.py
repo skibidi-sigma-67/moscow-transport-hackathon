@@ -5,9 +5,9 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from ml.models.predictor import Predictor
 
 from commons.contracts.v1.ml.requests import MLPredictionRequest, TelemetryPoint
-from ml.models.predictor import Predictor
 from research.data.dataset import OUTPUT, ROOT
 from research.legacy_dataset import load, seconds
 
@@ -53,18 +53,25 @@ def requests(root):
                 )
                 for point in window.itertuples()
             ]
-        yield row.sample_id, MLPredictionRequest(
-            tr_id=row.tr_id,
-            target_stop_id=row.target_stop_id,
-            target_time_begin=datetime.fromtimestamp(row.target_time, UTC),
-            current_time_T=now,
-            cur_dev_s=row.cur_dev_s,
-            segment_avg_speed=0,
-            idle_time_s=0,
-            coverage_ratio=0,
-            window_start_time=now - timedelta(seconds=900),
-            window_end_time=now,
-            recent_telemetry=telemetry,
+        yield (
+            row.sample_id,
+            MLPredictionRequest(
+                tr_id=row.tr_id,
+                target_stop_id=row.target_stop_id,
+                target_time_begin=datetime.fromtimestamp(row.target_time, UTC),
+                current_time_T=now,
+                cur_dev_s=row.cur_dev_s,
+                aggregates={
+                    "segment_avg_speed": 0,
+                    "idle_time_s": 0,
+                    "coverage_ratio": 0,
+                },
+                window={
+                    "start_time": now - timedelta(seconds=900),
+                    "end_time": now,
+                    "recent_points": telemetry,
+                }
+            ),
         )
 
 
