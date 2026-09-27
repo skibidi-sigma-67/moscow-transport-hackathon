@@ -1,0 +1,22 @@
+{
+  "feature_version": "v1",
+  "features": [
+    "cur_dev_s",
+    "cur_dev_missing",
+    "horizon_s",
+    "hour_sin",
+    "hour_cos",
+    "stops_ahead"
+  ],
+  "mode": "direct",
+  "config": {
+    "depth": 6,
+    "learning_rate": 0.08,
+    "l2_leaf_reg": 30,
+    "iterations": 120,
+    "test_weight": 4.0
+  },
+  "blend": 0.75,
+  "model_version": "legacy-score-anchored-v2",
+  "reference": "/Users/tim/Projects/moscow-transport-hackathon/ml/artifacts/reference-v1"
+}

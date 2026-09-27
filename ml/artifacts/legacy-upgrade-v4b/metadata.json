@@ -1,0 +1,33 @@
+{
+  "features": [
+    "cur_dev_s",
+    "cur_dev_missing",
+    "horizon_s",
+    "hour_sin",
+    "hour_cos",
+    "stops_ahead",
+    "target_lon",
+    "target_lat",
+    "distance_target_m",
+    "gps_age_s",
+    "last_lon",
+    "last_lat",
+    "last_speed",
+    "heading_alignment"
+  ],
+  "feature_version": "v1-plus",
+  "blend_with_winner": 0.5,
+  "config": {
+    "feature_set": "current_position",
+    "trees": 180,
+    "test_weight": 4,
+    "depth": 6,
+    "alpha": 0.5,
+    "group_mae": 73.52885125318171,
+    "time_mae": 66.47609357700318,
+    "validate_vehicle_mae": 79.70744565014007,
+    "selection_mae": 70.00247241509246
+  },
+  "model_version": "legacy-score-anchored-v4",
+  "offline_only": true
+}

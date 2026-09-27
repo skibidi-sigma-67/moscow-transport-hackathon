@@ -1,0 +1,28 @@
+{
+  "features": [
+    "cur_dev_s",
+    "cur_dev_missing",
+    "horizon_s",
+    "hour_sin",
+    "hour_cos",
+    "stops_ahead",
+    "target_lon",
+    "target_lat",
+    "distance_target_m",
+    "gps_age_s"
+  ],
+  "feature_version": "v1",
+  "blend_with_winner": 1.0,
+  "config": {
+    "feature_set": "route_location",
+    "trees": 160,
+    "test_weight": 4,
+    "depth": 6,
+    "alpha": 1.0,
+    "group_mae": 76.29303835607888,
+    "time_mae": 66.70970127603637,
+    "selection_mae": 71.50136981605763
+  },
+  "model_version": "legacy-score-anchored-v3",
+  "offline_only": true
+}
