@@ -51,6 +51,7 @@ class PredictionService:
         segment_avg_speed = 0.0
         idle_time_s = 0.0
         telemetry_points = []
+        window_points = []
         history_sorted = []
         coverage_ratio = 0.0
 
@@ -171,36 +172,26 @@ class PredictionService:
                 bearing = math.degrees(math.atan2(east, north))
 
                 heading_alignment = math.cos(math.radians(bearing - heading))
-            else:
-                lon = math.nan
-                lat = math.nan
-                speed = math.nan
-                heading_alignment = math.nan
-                distance_target_m = math.nan
-                east = math.nan
-                north = math.nan
-                gps_age_s = 3600.0
-
-            route_features = RouteFeatures(
-                cur_dev_missing=0.0,
-                horizon_s=target_time - now,
-                hour_sin=math.sin(2 * math.pi * (now % 86400) / 86400),
-                hour_cos=math.cos(2 * math.pi * (now % 86400) / 86400),
-                stops_ahead=float(
-                    bisect_right(stop_times, target_time)
-                    - bisect_right(stop_times, now)
-                ),
-                target_lon=next_stop.longitude,
-                target_lat=next_stop.latitude,
-                distance_target_m=distance_target_m,
-                gps_age_s=gps_age_s,
-                last_lon=lon,
-                last_lat=lat,
-                last_speed=speed,
-                heading_alignment=heading_alignment,
-                target_east_m=east,
-                target_north_m=north,
-            )
+                route_features = RouteFeatures(
+                    cur_dev_missing=0.0,
+                    horizon_s=target_time - now,
+                    hour_sin=math.sin(2 * math.pi * (now % 86400) / 86400),
+                    hour_cos=math.cos(2 * math.pi * (now % 86400) / 86400),
+                    stops_ahead=float(
+                        bisect_right(stop_times, target_time)
+                        - bisect_right(stop_times, now)
+                    ),
+                    target_lon=next_stop.longitude,
+                    target_lat=next_stop.latitude,
+                    distance_target_m=distance_target_m,
+                    gps_age_s=gps_age_s,
+                    last_lon=lon,
+                    last_lat=lat,
+                    last_speed=speed,
+                    heading_alignment=heading_alignment,
+                    target_east_m=east,
+                    target_north_m=north,
+                )
 
         ml_request = MLPredictionRequest(
             tr_id=tr_id,

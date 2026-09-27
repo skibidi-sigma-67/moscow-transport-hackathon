@@ -37,7 +37,7 @@ def timestamp(value):
     return (value.replace(tzinfo=UTC) if value.tzinfo is None else value).timestamp()
 
 
-def history(request):
+def history(request, keep_last=False):
     now = timestamp(request.current_time_T)
     start = max(now - 900, timestamp(request.window.start_time))
     end = min(now, timestamp(request.window.end_time))
@@ -59,7 +59,7 @@ def history(request):
         if p.longitude == p.latitude == 0:
             continue
         row = (t, p.longitude, p.latitude, p.speed, p.course)
-        rows[t] = min(rows.get(t, row), row)
+        rows[t] = row if keep_last else min(rows.get(t, row), row)
     return sorted(rows.values())
 
 

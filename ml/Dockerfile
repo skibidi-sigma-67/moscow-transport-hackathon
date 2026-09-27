@@ -17,6 +17,7 @@ RUN uv sync --frozen --no-dev --package ml --no-install-project
 
 COPY libs/commons/src/ libs/commons/src/
 COPY ml/src/ ml/src/
+COPY ml/artifacts/ ml/artifacts/
 
 ARG APP_USER_ID=10001
 ARG APP_PORT=8001

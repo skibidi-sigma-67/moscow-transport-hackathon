@@ -230,3 +230,4 @@ dataset/
 !ml/artifacts/oof.csv
 !ml/artifacts/test_predictions.csv
 !ml/artifacts/experiments.csv
+!ml/artifacts/schedule_plan.csv

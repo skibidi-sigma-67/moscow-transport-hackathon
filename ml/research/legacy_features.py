@@ -2,9 +2,55 @@ import itertools
 import math
 from dataclasses import dataclass
 
-from ml.schedule import clean, distance
-
 FEATURE_VERSION = "v1"
+
+
+@dataclass(frozen=True)
+class Observation:
+    time: float
+    lon: float
+    lat: float
+    speed: float
+    heading: float
+    location_valid: bool
+
+
+def clean(history, now):
+    rows = {}
+    for point in history:
+        if (
+            point.location_valid
+            and now - 900 <= point.time <= now
+            and all(
+                math.isfinite(value)
+                for value in (
+                    point.lon,
+                    point.lat,
+                    point.speed,
+                    point.heading,
+                )
+            )
+            and -180 <= point.lon <= 180
+            and -90 <= point.lat <= 90
+            and 0 <= point.speed <= 130
+            and not (point.lon == point.lat == 0)
+        ):
+            rows[point.time] = point
+    return [rows[time] for time in sorted(rows)]
+
+
+def distance(a, b):
+    lon1, lat1 = a
+    lon2, lat2 = b
+    if not all(math.isfinite(value) for value in (lon1, lat1, lon2, lat2)):
+        return math.nan
+    lat1, lat2 = math.radians(lat1), math.radians(lat2)
+    delta_lon = math.radians(lon2 - lon1)
+    haversine = (
+        math.sin((lat2 - lat1) / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
+    )
+    return 2 * 6371000 * math.asin(min(1.0, math.sqrt(max(0.0, haversine))))
 
 
 @dataclass(frozen=True)

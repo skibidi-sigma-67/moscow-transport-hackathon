@@ -9,6 +9,7 @@ from commons.contracts.v1.ml.requests import RouteFeatures
 from commons.contracts.v1.ml.responses import MLPredictionResponse
 from commons.enums import IncidentPattern, PredictionStatus, RiskLevel
 from ml.features import FEATURE_VERSION, SUPPORTED_FEATURES, features, timestamp
+from ml.schedule import SchedulePlan
 
 FRESHNESS_SECONDS = 30
 ENSEMBLE_WEIGHTS = {
@@ -19,6 +20,7 @@ ENSEMBLE_WEIGHTS = {
 ENSEMBLE_FILES = {
     "delay.cbm",
     "metadata.json",
+    "schedule_plan.csv",
 } | {
     f"{name}/{filename}"
     for name in ENSEMBLE_WEIGHTS
@@ -57,6 +59,7 @@ class Predictor:
             "coverage_180",
         }
         self.ensemble = ()
+        self.schedule_plan = None
         self.model_version = self.meta["model_version"]
         if strategy == "schedule_ensemble":
             manifest = json.loads((directory / "manifest.json").read_text())
@@ -74,7 +77,7 @@ class Predictor:
                 metadata = json.loads((directory / name / "metadata.json").read_text())
                 columns = metadata["features"]
                 if not metadata.get("offline_only") or not set(columns).issubset(
-                    set(RouteFeatures.model_fields.keys())
+                    set(RouteFeatures.model_fields) | {"cur_dev_s"}
                 ):
                     raise ValueError(f"Incompatible ensemble component: {name}")
                 model = CatBoostRegressor()
@@ -83,6 +86,7 @@ class Predictor:
                     raise ValueError(f"Incompatible ensemble features: {name}")
                 components.append((model, columns, weight))
             self.ensemble = tuple(components)
+            self.schedule_plan = SchedulePlan(directory / "schedule_plan.csv")
             self.model_version = "legacy-score-anchored-v5"
 
     def _baseline_delay(self, request, values):
@@ -94,11 +98,14 @@ class Predictor:
 
     def predict(self, request):
         values = features(request, self.feature_names)
-        if request.route_features is None:
+        route_features = request.route_features
+        if self.schedule_plan is not None and route_features is None:
+            route_features = self.schedule_plan.route_features(request)
+        if not self.ensemble or route_features is None:
             delay = self._baseline_delay(request, values)
             matched = False
         else:
-            route_values = request.route_features.model_dump()
+            route_values = route_features.model_dump()
             route_values["cur_dev_s"] = request.cur_dev_s
             delay = sum(
                 weight

@@ -14,7 +14,7 @@ class AppSettings(BaseModel):
     port: int = 8001
     workers: int = 1
     model_dir: str = str(Path(__file__).resolve().parents[2] / "artifacts")
-    strategy: Literal["baseline", "schedule_ensemble"] = "baseline"
+    strategy: Literal["baseline", "schedule_ensemble"] = "schedule_ensemble"
 
 
 class Settings(BaseSettings):
