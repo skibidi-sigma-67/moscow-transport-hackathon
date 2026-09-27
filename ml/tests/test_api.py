@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from ml.main import app
 
 from commons.contracts.v1.ml.responses import MLPredictionResponse
+from commons.enums import PredictionStatus
 
 
 def payload():
@@ -44,11 +45,24 @@ def test_api_contract_and_validation():
             "predicted_delay_s",
             "risk_level",
             "pattern_reason",
+            "status",
         }
         assert response.pattern_reason is None
+        assert response.status == PredictionStatus.OK
         assert client.get("/health").status_code == 200
         data["target_time_begin"] = data["current_time_T"]
         assert client.post("/predict", json=data).status_code == 422
         data = payload()
         del data["coverage_ratio"]
         assert client.post("/predict", json=data).status_code == 422
+
+
+def test_prediction_survives_missing_history_and_reconnect():
+    with TestClient(app) as client:
+        data = payload()
+        data["recent_telemetry"][0]["is_historical"] = True
+        assert client.post("/predict", json=data).status_code == 200
+        data["recent_telemetry"] = []
+        assert client.post("/predict", json=data).status_code == 200
+        data = payload()
+        assert client.post("/predict", json=data).status_code == 200

@@ -21,7 +21,7 @@ def seconds(values):
     )
 
 
-def load(root, split):
+def load(root, split, include_extras=False):
     root = Path(root)
     points = pd.read_csv(
         root
@@ -89,12 +89,15 @@ def load(root, split):
             raise ValueError(f"Invalid target horizon: {r.sample_id}")
         hint = float(r.cur_dev_s) if pd.notna(r.cur_dev_s) else None
         xs.append(features(history, stops, target, r.now, hint))
-        recovered, _ = reconstruct_deviation(history, stops, r.now)
-        gps_xs.append(features(history, stops, target, r.now, recovered))
-        seqs.append(sequence(history, r.now))
+        if include_extras:
+            recovered, _ = reconstruct_deviation(history, stops, r.now)
+            gps_xs.append(features(history, stops, target, r.now, recovered))
+            seqs.append(sequence(history, r.now))
     return (
         points,
         pd.DataFrame(xs),
-        np.asarray(seqs, dtype=np.float32).transpose(0, 2, 1),
-        pd.DataFrame(gps_xs),
+        np.asarray(seqs, dtype=np.float32).transpose(0, 2, 1)
+        if include_extras
+        else None,
+        pd.DataFrame(gps_xs) if include_extras else None,
     )

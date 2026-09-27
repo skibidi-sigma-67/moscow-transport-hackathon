@@ -106,6 +106,35 @@ def features(history, stops, target, now, cur_dev=None):
         if rows
         else math.nan,
     }
+    if rows and math.isfinite(f["distance_target_m"]):
+        latest = rows[-1]
+        east = (
+            math.radians(target.lon - latest.lon)
+            * 6371000
+            * math.cos(math.radians((latest.lat + target.lat) / 2))
+        )
+        north = math.radians(target.lat - latest.lat) * 6371000
+        bearing = math.degrees(math.atan2(east, north))
+        f["last_lon"] = latest.lon
+        f["last_lat"] = latest.lat
+        f["last_speed"] = latest.speed
+        f["heading_alignment"] = math.cos(math.radians(bearing - latest.heading))
+        f["required_speed_kmh"] = f["distance_target_m"] * 3.6 / f["horizon_s"]
+        f["distance_per_stop_m"] = f["distance_target_m"] / max(1.0, f["stops_ahead"])
+        f["target_east_m"] = east
+        f["target_north_m"] = north
+    else:
+        for name in (
+            "last_lon",
+            "last_lat",
+            "last_speed",
+            "heading_alignment",
+            "required_speed_kmh",
+            "distance_per_stop_m",
+            "target_east_m",
+            "target_north_m",
+        ):
+            f[name] = math.nan
     for window in (60, 180, 300, 600, 900):
         points = [p for p in rows if p.time >= now - window]
         durations = [
