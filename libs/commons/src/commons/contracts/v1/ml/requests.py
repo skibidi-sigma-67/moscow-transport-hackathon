@@ -13,7 +13,9 @@ class TelemetryPoint(FrozenModel):
     course: float = Field(..., description="Курс направления")
     location_valid: bool = Field(..., description="Признак валидности координат")
     packet_time: datetime = Field(..., description="Время получения пакета")
-    is_historical: bool = Field(..., description="Признак исторической записи (из черного ящика)")
+    is_historical: bool = Field(
+        ..., description="Признак исторической записи (из черного ящика)"
+    )
 
 
 class MLPredictionRequest(FrozenModel):
@@ -32,9 +34,15 @@ class MLPredictionRequest(FrozenModel):
     idle_time_s: float = Field(
         ..., description="Время простоя на светофорах/в пробках (в секундах)"
     )
-    window_start_time: datetime = Field(..., description="Начало временного окна телеметрии")
-    window_end_time: datetime = Field(..., description="Конец временного окна телеметрии")
-    coverage_ratio: float = Field(..., description="Отношение фактического кол-ва точек к ожидаемому")
+    window_start_time: datetime = Field(
+        ..., description="Начало временного окна телеметрии"
+    )
+    window_end_time: datetime = Field(
+        ..., description="Конец временного окна телеметрии"
+    )
+    coverage_ratio: float = Field(
+        ..., description="Отношение фактического кол-ва точек к ожидаемому"
+    )
     recent_telemetry: list[TelemetryPoint] = Field(
         ..., description="Последние телеметрические отметки (история)"
     )

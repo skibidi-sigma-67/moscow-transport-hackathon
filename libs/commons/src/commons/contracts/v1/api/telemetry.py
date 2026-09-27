@@ -13,4 +13,6 @@ class TelemetryPointDto(FrozenModel):
     course: float = Field(..., description="Курс (направление движения в градусах)")
     location_valid: bool = Field(True, description="Признак валидности координат")
     packet_time: datetime | None = Field(None, description="Время получения пакета")
-    is_historical: bool = Field(False, description="Признак исторической записи (из черного ящика)")
+    is_historical: bool = Field(
+        False, description="Признак исторической записи (из черного ящика)"
+    )
