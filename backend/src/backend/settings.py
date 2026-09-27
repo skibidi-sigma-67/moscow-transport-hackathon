@@ -15,6 +15,7 @@ class AppSettings(BaseModel):
     ml_telemetry_window_minutes: int = 30
     max_idle_gap_s: float = 120.0
     historical_packet_delay_s: float = 300.0
+    dashboard_websocket_update_interval_s: float = 2.0
 
 
 class DatabaseSettings(BaseModel):
