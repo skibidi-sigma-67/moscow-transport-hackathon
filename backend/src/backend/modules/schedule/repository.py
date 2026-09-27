@@ -38,9 +38,7 @@ class ScheduleRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_stop_plan(
-        self, tr_id: int, stop_id: int
-    ) -> SchedulePlan | None:
+    async def get_stop_plan(self, tr_id: int, stop_id: int) -> SchedulePlan | None:
         stmt = (
             select(SchedulePlan)
             .where(SchedulePlan.tr_id == tr_id, SchedulePlan.stop_id == stop_id)

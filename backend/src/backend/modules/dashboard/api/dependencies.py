@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import Depends, Request, WebSocket
+from fastapi import Depends, WebSocket
 
 from backend.api.dependencies import RedisClientDependency
 from backend.modules.dashboard.service import DashboardService

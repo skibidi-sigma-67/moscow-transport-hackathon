@@ -35,7 +35,7 @@ class DeviceService:
                 unit_id = int(row["unit_id"])
                 tr_id = int(row["tr_id"])
                 unique_pairs[unit_id] = tr_id
-            except KeyError, ValueError:
+            except (KeyError, ValueError):
                 continue
 
         mappings = [{"unit_id": u, "tr_id": t} for u, t in unique_pairs.items()]
