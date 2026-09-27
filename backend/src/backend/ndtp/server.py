@@ -77,32 +77,44 @@ class NdtpServer:
                         try:
                             cache_key = f"device_mapping:{npl.peer_address}"
                             tr_id_str = await self.redis_client.get(cache_key)
-                            
+
                             if tr_id_str:
                                 tr_id = int(tr_id_str)
                             else:
-                                async with self.session_maker() as session, session.begin():
-                                    device_service = DeviceService(DeviceRepository(session))
-                                    tr_id = await device_service.get_tr_id(npl.peer_address)
-                                
+                                async with (
+                                    self.session_maker() as session,
+                                    session.begin(),
+                                ):
+                                    device_service = DeviceService(
+                                        DeviceRepository(session)
+                                    )
+                                    tr_id = await device_service.get_tr_id(
+                                        npl.peer_address
+                                    )
+
                                 if tr_id:
-                                    await self.redis_client.setex(cache_key, 3600, tr_id)
+                                    await self.redis_client.setex(
+                                        cache_key, 3600, tr_id
+                                    )
 
                             if not tr_id:
                                 logger.warning(f"Unknown unit_id {npl.peer_address}")
                                 continue
 
                             telemetry_service = TelemetryService(
-                                TelemetryRedisRepository(self.redis_client, self.settings)
+                                TelemetryRedisRepository(
+                                    self.redis_client, self.settings
+                                )
                             )
 
-                            if (packet_time - point.timestamp).total_seconds() > self.settings.app.historical_packet_delay_s:
+                            if (
+                                (packet_time - point.timestamp).total_seconds()
+                                > self.settings.app.historical_packet_delay_s
+                            ):
                                 point = point.model_copy(update={"is_historical": True})
 
                             await telemetry_service.add_point(tr_id, point)
-                            logger.info(
-                                f"Saved telemetry for tr_id={tr_id}: {point}"
-                            )
+                            logger.info(f"Saved telemetry for tr_id={tr_id}: {point}")
                         except Exception as e:
                             logger.error(f"Error processing telemetry from {addr}: {e}")
                 else:

@@ -4,6 +4,7 @@ from backend.modules.dashboard.api.dependencies import DashboardWebsocketPoolDep
 
 websocket_router = APIRouter()
 
+
 @websocket_router.websocket("/websocket")
 async def dashboard_websocket(
     websocket: WebSocket,

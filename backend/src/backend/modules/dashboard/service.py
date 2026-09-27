@@ -1,7 +1,9 @@
+import logging
 from datetime import UTC, datetime
 
 import redis.asyncio as redis
 
+from backend.modules.telemetry.models import RedisTelemetryRecord
 from backend.modules.telemetry.service import TelemetryService
 from commons.contracts.v1.api.predictions import PredictionLogDto
 from commons.contracts.v1.dashboard.responses import (
@@ -10,6 +12,8 @@ from commons.contracts.v1.dashboard.responses import (
     VehicleState,
 )
 from commons.enums import RiskLevel
+
+logger = logging.getLogger(__name__)
 
 
 class DashboardService:
@@ -29,10 +33,8 @@ class DashboardService:
             for tr_id in active_ids:
                 pipe.lindex(f"telemetry:history:{tr_id}", -1)
                 pipe.get(f"vehicle_prediction:{tr_id}")
-            
-            results = await pipe.execute()
 
-        from backend.modules.telemetry.models import RedisTelemetryRecord
+            results = await pipe.execute()
 
         vehicles = []
         for i, tr_id in enumerate(active_ids):
@@ -49,7 +51,9 @@ class DashboardService:
 
             if prediction_json:
                 try:
-                    prediction_log = PredictionLogDto.model_validate_json(prediction_json)
+                    prediction_log = PredictionLogDto.model_validate_json(
+                        prediction_json
+                    )
                     risk_color = prediction_log.risk_level
 
                     if risk_color != RiskLevel.GREEN:
@@ -59,8 +63,10 @@ class DashboardService:
                             reason=prediction_log.pattern_reason,
                             route_segment=f"Segment for tr_id {tr_id}",
                         )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(
+                        "Failed to parse prediction for tr_id %d: %s", tr_id, e
+                    )
 
             vehicles.append(
                 VehicleState(

@@ -1,9 +1,8 @@
 from fastapi import APIRouter
 
 from backend.modules.dashboard.api.dependencies import DashboardServiceDependency
-from commons.contracts.v1.dashboard.responses import DashboardStateResponse
-
 from backend.modules.dashboard.api.websocket_router import websocket_router
+from commons.contracts.v1.dashboard.responses import DashboardStateResponse
 
 dashboard_router = APIRouter(
     prefix="/dashboard",
