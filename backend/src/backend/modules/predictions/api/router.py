@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from backend.modules.predictions.api.dependencies import PredictionServiceDependency
 from commons.contracts.v1.api.predictions import PredictionLogDto
@@ -19,6 +19,8 @@ async def trigger_prediction(
     tr_id: int,
     service: PredictionServiceDependency,
 ) -> PredictionLogDto:
-    result = await service.generate_prediction(tr_id)
-
-    return result
+    try:
+        result = await service.generate_prediction(tr_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
