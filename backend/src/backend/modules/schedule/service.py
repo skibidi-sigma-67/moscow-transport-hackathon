@@ -64,16 +64,14 @@ class ScheduleService:
             if not time_begin_str:
                 continue
 
-            time_begin_str = re.sub(r"(\.\d{6})\d+", r"\g<1>", time_begin_str)
-
+            clean_time_str = time_begin_str[:19]
             try:
                 time_begin = datetime.strptime(
-                    time_begin_str, "%Y-%m-%d %H:%M:%S"
+                    clean_time_str, "%Y-%m-%d %H:%M:%S"
                 ).replace(tzinfo=UTC)
-            except ValueError:
-                time_begin = datetime.strptime(
-                    time_begin_str, "%Y-%m-%d %H:%M:%S.%f"
-                ).replace(tzinfo=UTC)
+            except ValueError as e:
+                print(f"FAILED TO PARSE: {repr(time_begin_str)}")
+                raise e
 
             plan = SchedulePlan(
                 tr_id=int(row["tr_id"]),
