@@ -81,6 +81,7 @@ class ScheduleService:
             plans.append(plan)
 
         if plans:
+            await self.repository.clear()
             await self.repository.create_batch(plans)
 
         return len(plans)

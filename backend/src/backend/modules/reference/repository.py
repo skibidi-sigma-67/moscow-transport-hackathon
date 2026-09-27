@@ -1,5 +1,4 @@
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import DeviceMapping
@@ -22,15 +21,14 @@ class DeviceRepository:
 
         return mapping
 
-    async def bulk_create_if_not_exists(self, mappings: list[dict[str, int]]) -> int:
-        if not mappings:
-            return 0
-
-        stmt = (
-            insert(DeviceMapping)
-            .values(mappings)
-            .on_conflict_do_nothing(index_elements=["unit_id"])
-        )
-        result = await self.session.execute(stmt)
+    async def clear(self) -> None:
+        stmt = delete(DeviceMapping)
+        await self.session.execute(stmt)
         await self.session.flush()
-        return result.rowcount
+
+    async def create_batch(self, mappings: list[DeviceMapping]) -> None:
+        if not mappings:
+            return
+
+        self.session.add_all(mappings)
+        await self.session.flush()

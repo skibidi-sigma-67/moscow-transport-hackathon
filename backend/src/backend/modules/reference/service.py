@@ -4,6 +4,7 @@ from fastapi import UploadFile
 
 from commons.contracts.v1.api.reference import DeviceMappingDto
 
+from .models import DeviceMapping
 from .repository import DeviceRepository
 
 
@@ -38,13 +39,15 @@ class DeviceService:
             except (KeyError, ValueError):
                 continue
 
-        mappings = [{"unit_id": u, "tr_id": t} for u, t in unique_pairs.items()]
+        mappings = [DeviceMapping(unit_id=u, tr_id=t) for u, t in unique_pairs.items()]
+
+        await self.repository.clear()
 
         total_inserted = 0
         chunk_size = 5000
         for i in range(0, len(mappings), chunk_size):
             chunk = mappings[i : i + chunk_size]
-            count = await self.repository.bulk_create_if_not_exists(chunk)
-            total_inserted += count
+            await self.repository.create_batch(chunk)
+            total_inserted += len(chunk)
 
         return total_inserted

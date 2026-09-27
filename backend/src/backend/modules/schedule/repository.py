@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import SchedulePlan
@@ -46,6 +46,11 @@ class ScheduleRepository:
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def clear(self) -> None:
+        stmt = delete(SchedulePlan)
+        await self.session.execute(stmt)
+        await self.session.flush()
 
     async def create_batch(self, plans: list[SchedulePlan]) -> None:
         self.session.add_all(plans)
