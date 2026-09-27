@@ -31,18 +31,19 @@ def run(
             "start_time": (now - timedelta(seconds=900)).isoformat(),
             "end_time": now.isoformat(),
             "recent_points": [
-            {
-                "timestamp": (now - timedelta(seconds=15 * i)).isoformat(),
-                "longitude": 37.0,
-                "latitude": 55.0,
-                "speed": 20,
-                "course": 90,
-                "location_valid": True,
-                "packet_time": now.isoformat(),
-                "is_historical": False,
-            }
-            for i in range(50)
-        ],
+                {
+                    "timestamp": (now - timedelta(seconds=15 * i)).isoformat(),
+                    "longitude": 37.0,
+                    "latitude": 55.0,
+                    "speed": 20,
+                    "course": 90,
+                    "location_valid": True,
+                    "packet_time": now.isoformat(),
+                    "is_historical": False,
+                }
+                for i in range(50)
+            ],
+        },
     }
     results = {}
     with httpx.Client(
