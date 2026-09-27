@@ -224,3 +224,9 @@ dataset/
 *.tar
 *.zip
 
+
+# Reproducible ML output (CSV exceptions to the global dataset ignore)
+!ml/artifacts/submission.csv
+!ml/artifacts/oof.csv
+!ml/artifacts/test_predictions.csv
+!ml/artifacts/experiments.csv
