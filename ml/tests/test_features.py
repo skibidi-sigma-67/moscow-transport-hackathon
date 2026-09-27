@@ -1,75 +1,77 @@
-import math
+import numpy as np
+from ml.features import features
+from test_api import payload
 
-from ml.data.dataset import seconds
-
-from commons.ml_features import (
-    Observation,
-    Stop,
-    features,
-    reconstruct_deviation,
-    select_target,
-    sequence,
-)
-
-NOW = 1767665400.0
-STOP = Stop(NOW + 720, 37.1, 55.1, 1)
-HISTORY = [
-    Observation(NOW - 30, 37.0, 55.0, 10, 90),
-    Observation(NOW - 10, 37.01, 55.01, 0, 90),
-]
+from commons.contracts.v1.ml.requests import MLPredictionRequest
 
 
-def same(a, b):
-    assert a.keys() == b.keys()
-    for k in a:
-        assert a[k] == b[k] or (math.isnan(a[k]) and math.isnan(b[k]))
-
-
-def test_future_and_invalid_points_do_not_change_features():
-    extra = [
-        Observation(NOW + 1, 38, 56, 100),
-        Observation(NOW - 5, 0, 0, 999),
-        Observation(NOW - 3, 37, 55, 20, valid=False),
+def test_future_invalid_and_duplicate_points_do_not_change_features():
+    data = payload()
+    original = MLPredictionRequest.model_validate(data)
+    point = data["recent_telemetry"][0]
+    data["recent_telemetry"] += [
+        point,
+        dict(point, timestamp="2026-01-06T12:01:00Z"),
+        dict(point, location_valid=False),
+        dict(point, packet_time="2026-01-06T12:01:00Z"),
     ]
-    same(
-        features(HISTORY, [STOP], STOP, NOW, 20),
-        features(HISTORY + extra, [STOP], STOP, NOW, 20),
-    )
-    assert sequence(HISTORY, NOW) == sequence(HISTORY + extra, NOW)
+    modified = MLPredictionRequest.model_validate(data)
+    before, after = features(original), features(modified)
+    assert before.keys() == after.keys()
+    for key in before:
+        assert (
+            before[key] == after[key]
+            or isinstance(before[key], float)
+            and np.isnan(before[key])
+            and np.isnan(after[key])
+        )
 
 
-def test_order_duplicates():
-    same(
-        features(HISTORY, [STOP], STOP, NOW),
-        features(list(reversed(HISTORY)) * 2, [STOP], STOP, NOW),
-    )
+def test_empty_telemetry_has_missing_motion_and_finite_hint():
+    data = payload()
+    data["recent_telemetry"] = []
+    values = features(MLPredictionRequest.model_validate(data))
+    assert values["cur_dev_s"] == -40
+    assert values["coverage_900"] == 0
+    assert np.isnan(values["idle_900"])
 
 
-def test_target_boundaries():
-    assert select_target([Stop(NOW + 600, 0, 0, 1)], NOW) is None
-    assert select_target([Stop(NOW + 900, 0, 0, 2)], NOW).stop_id == 2
-    assert select_target([Stop(NOW + 901, 0, 0, 3)], NOW) is None
+def test_time_weighted_motion_ignores_gaps_and_gps_jumps():
+    from datetime import datetime, timedelta
+
+    data = payload()
+    point = data["recent_telemetry"][0]
+    now = datetime.fromisoformat(data["current_time_T"])
+    data["recent_telemetry"] = [
+        dict(
+            point,
+            timestamp=(now - timedelta(seconds=age)).isoformat(),
+            speed=speed,
+            longitude=longitude,
+        )
+        for age, speed, longitude in [
+            (100, 0, 37),
+            (30, 0, 37),
+            (10, 20, 38),
+            (0, 20, 38),
+        ]
+    ]
+    values = features(MLPredictionRequest.model_validate(data))
+    assert values["time_coverage_900"] == 30 / 900
+    assert values["time_idle_900"] == 20 / 30
+    assert values["time_speed_900"] == 200 / 30
+    assert values["gps_jumps_900"] == 1
+    assert values["safe_distance_900"] == 0
 
 
-def test_missing_and_gap_are_not_idle():
-    f = features([Observation(NOW - 800, 37, 55, 0)], [STOP], STOP, NOW)
-    assert f["coverage_900"] == 30 / 900
-    assert f["gps_age_s"] == 800
-    assert math.isnan(f["cur_dev_s"])
-    assert f["cur_dev_missing"] == 1
-
-
-def test_confirm_and_ambiguous_visits():
-    rows = [Observation(NOW - 20, 37, 55, 0), Observation(NOW - 10, 37, 55, 0)]
-    s = Stop(NOW - 50, 37, 55, 10)
-    assert reconstruct_deviation(rows, [s], NOW) == (30, 20)
-    assert reconstruct_deviation(rows, [s, Stop(NOW - 300, 37, 55, 11)], NOW) == (
-        None,
-        None,
-    )
-
-
-def test_timestamp_seconds():
-    import pandas as pd
-
-    assert seconds(pd.Series(["2026-01-06 02:10:00"])).iloc[0] == NOW
+def test_selected_features_match_full_computation():
+    request = MLPredictionRequest.model_validate(payload())
+    full = features(request)
+    names = ["cur_dev_s", "time_idle_180", "safe_speed_900", "current_stop_s"]
+    selected = features(request, names)
+    for name in names:
+        assert (
+            selected[name] == full[name]
+            or np.isnan(selected[name])
+            and np.isnan(full[name])
+        )

@@ -1,15 +1,14 @@
 .PHONY: run test lint format
 
 run:
-	uv run python -m ml.main
+	uv run --frozen python -m ml.main
 
 test:
-	uv run pytest tests -v
+	uv run --frozen pytest tests -q
 
 lint:
-	uv run ruff check .
+	uvx ruff check .
 
 format:
-	uv run ruff check --fix .
-	uv run ruff format .
-
+	uvx ruff check --fix .
+	uvx ruff format .

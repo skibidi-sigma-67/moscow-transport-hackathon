@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,10 +8,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class AppSettings(BaseModel):
     title: str = "Transport delay predictor"
     version: str = "1.0"
-    debug: bool = True
+    debug: bool = False
     host: str = "0.0.0.0"
     port: int = 8001
-    model_dir: str = "ml/artifacts"
+    model_dir: str = str(Path(__file__).resolve().parents[2] / "artifacts")
 
 
 class Settings(BaseSettings):

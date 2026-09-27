@@ -1,17 +1,12 @@
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from fastapi.testclient import TestClient
 from ml.main import app
 
-
-@pytest.fixture
-def client():
-    with TestClient(app) as c:
-        yield c
+from commons.contracts.v1.ml.responses import MLPredictionResponse
 
 
-def request():
+def payload():
     now = datetime(2026, 1, 6, 12, tzinfo=UTC)
     return {
         "tr_id": 1,
@@ -19,38 +14,41 @@ def request():
         "current_time_T": now.isoformat(),
         "target_time_begin": (now + timedelta(seconds=720)).isoformat(),
         "cur_dev_s": -40,
-        "cur_dev_source": "provided",
+        "segment_avg_speed": 20,
+        "idle_time_s": 0,
+        "coverage_ratio": 0.1,
+        "window_start_time": (now - timedelta(seconds=900)).isoformat(),
+        "window_end_time": now.isoformat(),
         "recent_telemetry": [
             {
                 "timestamp": now.isoformat(),
+                "packet_time": now.isoformat(),
                 "longitude": 37,
                 "latitude": 55,
                 "speed": 20,
                 "course": 90,
+                "location_valid": True,
+                "is_historical": False,
             }
         ],
     }
 
 
-def test_api_future_invariance_and_status(client):
-    r = request()
-    a = client.post("/predict", json=r)
-    assert a.status_code == 200
-    assert 0 <= a.json()["p_late"] <= 1
-    r["recent_telemetry"].append(
-        {
-            "timestamp": "2026-01-06T12:01:00Z",
-            "longitude": 38,
-            "latitude": 56,
-            "speed": 100,
-            "course": 90,
+def test_api_contract_and_validation():
+    with TestClient(app) as client:
+        data = payload()
+        result = client.post("/predict", json=data)
+        assert result.status_code == 200
+        response = MLPredictionResponse.model_validate(result.json())
+        assert set(result.json()) == {
+            "predicted_delay_s",
+            "risk_level",
+            "pattern_reason",
         }
-    )
-    b = client.post("/predict", json=r)
-    assert a.json()["predicted_delay_s"] == b.json()["predicted_delay_s"]
-    r["cur_dev_s"] = None
-    r["recent_telemetry"] = []
-    assert client.post("/predict", json=r).json()["status"] == "UNAVAILABLE"
-    r["target_time_begin"] = "2026-01-06T12:10:00Z"
-    assert client.post("/predict", json=r).json()["status"] == "NO_TARGET"
-    assert client.get("/health").status_code == 200
+        assert response.pattern_reason is None
+        assert client.get("/health").status_code == 200
+        data["target_time_begin"] = data["current_time_T"]
+        assert client.post("/predict", json=data).status_code == 422
+        data = payload()
+        del data["coverage_ratio"]
+        assert client.post("/predict", json=data).status_code == 422

@@ -1,15 +1,15 @@
+import math
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from ml.features import FEATURE_VERSION, features, history, timestamp
 
-from commons.ml_features import (
-    Observation,
-    Stop,
-    features,
-    reconstruct_deviation,
-    sequence,
-)
+from commons.contracts.v1.ml.requests import MLPredictionRequest, TelemetryPoint
+
+ROOT = Path(__file__).resolve().parents[3] / "dataset"
+OUTPUT = Path(__file__).resolve().parents[2] / "artifacts"
 
 
 def seconds(values):
@@ -17,11 +17,13 @@ def seconds(values):
         pd.to_datetime(values, format="mixed", utc=True)
         .dt.as_unit("ns")
         .astype("int64")
-        / 1000000000.0
+        / 1e9
     )
 
 
-def load(root, split):
+def load(root, split, policy="event", include_sequence=True):
+    if policy not in ("event", "receive"):
+        raise ValueError("Unknown availability policy")
     root = Path(root)
     points = pd.read_csv(
         root
@@ -32,27 +34,13 @@ def load(root, split):
         )
     )
     points["now"] = seconds(points["T"])
-    points["target_time"] = seconds(points["target_time_begin"])
-    schedule = pd.read_csv(
-        root / split / ("schedule_plan.csv" if split == "validate" else "schedule.csv"),
-        usecols=["tr_id", "tt_action_item_id", "time_begin", "geom"],
-    )
-    schedule["time"] = seconds(schedule["time_begin"])
-    coords = schedule.geom.str.extract(
-        "POINT\\s*\\(([-\\d.]+)\\s+([-\\d.]+)\\)"
-    ).astype(float)
-    schedule["lon"], schedule["lat"] = (coords[0], coords[1])
-    plans = {
-        int(k): [
-            Stop(r.time, r.lon, r.lat, int(r.tt_action_item_id)) for r in g.itertuples()
-        ]
-        for k, g in schedule.groupby("tr_id")
-    }
+    points["target_time"] = seconds(points.target_time_begin)
     traffic = pd.read_csv(
         root / split / "traffic.csv",
         usecols=[
             "tr_id",
             "event_time",
+            "receive_time",
             "lon",
             "lat",
             "speed",
@@ -61,40 +49,95 @@ def load(root, split):
         ],
     )
     traffic["time"] = seconds(traffic.event_time)
+    traffic["arrival"] = seconds(traffic.receive_time)
     histories = {int(k): g.sort_values("time") for k, g in traffic.groupby("tr_id")}
-    xs, seqs, gps_xs = ([], [], [])
+    xs, sequences = [], []
     for r in points.itertuples():
         g = histories.get(int(r.tr_id))
-        if g is None:
-            history = []
-        else:
+        telemetry = []
+        if g is not None:
             ts = g.time.to_numpy()
             window = g.iloc[
                 np.searchsorted(ts, r.now - 900) : np.searchsorted(
                     ts, r.now, side="right"
                 )
             ]
-            history = [
-                Observation(
-                    p.time, p.lon, p.lat, p.speed, p.heading, bool(p.location_valid)
+            telemetry = [
+                TelemetryPoint(
+                    timestamp=datetime.fromtimestamp(p.time, UTC),
+                    packet_time=datetime.fromtimestamp(
+                        p.arrival if policy == "receive" else p.time, UTC
+                    ),
+                    longitude=p.lon,
+                    latitude=p.lat,
+                    speed=p.speed,
+                    course=p.heading,
+                    location_valid=bool(p.location_valid),
+                    is_historical=False,
                 )
                 for p in window.itertuples()
             ]
-        stops = plans.get(int(r.tr_id), [])
-        target = next(
-            (s for s in stops if s.stop_id == r.target_stop_id),
-            Stop(r.target_time, np.nan, np.nan, int(r.target_stop_id)),
+        request = MLPredictionRequest(
+            tr_id=r.tr_id,
+            target_stop_id=r.target_stop_id,
+            current_time_T=datetime.fromtimestamp(r.now, UTC),
+            target_time_begin=datetime.fromtimestamp(r.target_time, UTC),
+            cur_dev_s=r.cur_dev_s,
+            segment_avg_speed=0,
+            idle_time_s=0,
+            coverage_ratio=0,
+            window_start_time=datetime.fromtimestamp(r.now - 900, UTC),
+            window_end_time=datetime.fromtimestamp(r.now, UTC),
+            recent_telemetry=telemetry,
         )
-        if not 600 < target.time - r.now <= 900:
-            raise ValueError(f"Invalid target horizon: {r.sample_id}")
-        hint = float(r.cur_dev_s) if pd.notna(r.cur_dev_s) else None
-        xs.append(features(history, stops, target, r.now, hint))
-        recovered, _ = reconstruct_deviation(history, stops, r.now)
-        gps_xs.append(features(history, stops, target, r.now, recovered))
-        seqs.append(sequence(history, r.now))
-    return (
-        points,
-        pd.DataFrame(xs),
-        np.asarray(seqs, dtype=np.float32).transpose(0, 2, 1),
-        pd.DataFrame(gps_xs),
+        xs.append(features(request))
+        if include_sequence:
+            sequences.append(sequence(request))
+    x = pd.DataFrame(xs)
+    return points, x, np.asarray(sequences, dtype=np.float32)
+
+
+def sequence(request):
+    now = timestamp(request.current_time_T)
+    result = np.zeros((6, 60), dtype=np.float32)
+    for t, lon, lat, speed, course in history(request):
+        index = min(59, int((t - (now - 900)) / 15))
+        result[:, index] = (
+            speed / 100,
+            math.sin(math.radians(course)),
+            math.cos(math.radians(course)),
+            float(speed < 3),
+            (now - t) / 900,
+            1,
+        )
+    return result
+
+
+def export(root, split, output, policy="receive"):
+    points, x, _ = load(root, split, policy=policy, include_sequence=False)
+    if "target_delay_s" not in points:
+        raise ValueError("Updates require observed labels")
+    result = x.copy()
+    result["sample_id"] = points.sample_id
+    result["now"] = points.now
+    result["available_at"] = np.maximum(
+        points.target_time, points.target_time + points.target_delay_s
     )
+    result["target_delay_s"] = points.target_delay_s
+    result["feature_version"] = FEATURE_VERSION
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    result.to_csv(output, index=False)
+    return result
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=Path, default=ROOT)
+    parser.add_argument("--split", choices=["train", "test"], default="train")
+    parser.add_argument("--policy", choices=["event", "receive"], default="receive")
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    export(args.dataset, args.split, args.output, args.policy)

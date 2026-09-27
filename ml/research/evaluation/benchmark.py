@@ -1,7 +1,6 @@
 import argparse
 import concurrent.futures
 import json
-import platform
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -9,24 +8,22 @@ from pathlib import Path
 import httpx
 import numpy as np
 
+from research.data.dataset import OUTPUT
 
-def run(url):
+
+def run(url, output=OUTPUT / "benchmark.json"):
     now = datetime(2026, 1, 6, 12, tzinfo=UTC)
     payload = {
         "tr_id": 1,
         "target_stop_id": 1,
         "target_time_begin": (now + timedelta(seconds=720)).isoformat(),
         "current_time_T": now.isoformat(),
-        "cur_dev_s": None,
-        "cur_dev_source": "gps",
-        "planned_stops": [
-            {
-                "stop_id": 1,
-                "time_begin": (now + timedelta(seconds=720)).isoformat(),
-                "longitude": 37.1,
-                "latitude": 55.1,
-            }
-        ],
+        "cur_dev_s": 0,
+        "segment_avg_speed": 20,
+        "idle_time_s": 0,
+        "coverage_ratio": 1,
+        "window_start_time": (now - timedelta(seconds=900)).isoformat(),
+        "window_end_time": now.isoformat(),
         "recent_telemetry": [
             {
                 "timestamp": (now - timedelta(seconds=15 * i)).isoformat(),
@@ -35,6 +32,8 @@ def run(url):
                 "speed": 20,
                 "course": 90,
                 "location_valid": True,
+                "packet_time": now.isoformat(),
+                "is_historical": False,
             }
             for i in range(60)
         ],
@@ -49,7 +48,7 @@ def run(url):
             start = time.perf_counter()
             r = client.post("/predict", json=payload)
             r.raise_for_status()
-            assert r.json()["status"] == "DEGRADED"
+            assert np.isfinite(r.json()["predicted_delay_s"])
             return (time.perf_counter() - start) * 1000
 
         for _ in range(10):
@@ -66,17 +65,15 @@ def run(url):
                 "requests_per_second": 300 / elapsed,
                 "errors": 0,
             }
-    report = {
-        "hardware": platform.platform(),
-        "cpu": platform.processor(),
-        "scope": "Local loopback HTTP, 60 telemetry points per request. Does not measure full NDTP/backend chain.",
-        "results": results,
-    }
-    Path("ml/artifacts/benchmark.json").write_text(json.dumps(report, indent=2))
-    print(json.dumps(report, indent=2))
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(results, indent=2))
+    print(json.dumps(results, indent=2))
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--url", default="http://127.0.0.1:8001")
-    run(p.parse_args().url)
+    p.add_argument("--output", type=Path, default=OUTPUT / "benchmark.json")
+    args = p.parse_args()
+    run(args.url, args.output)

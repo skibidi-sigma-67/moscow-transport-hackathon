@@ -1,20 +1,17 @@
 import argparse
 import hashlib
 import json
-import platform
 import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from catboost import CatBoostClassifier, CatBoostRegressor
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import brier_score_loss, log_loss, mean_absolute_error
+from catboost import CatBoostRegressor
+from ml.features import FEATURE_VERSION
+from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import GroupKFold
 
-from commons.ml_features import FEATURE_VERSION
-from research.data.dataset import load
-from research.models.tcn import fit_predict
+from research.data.dataset import OUTPUT, ROOT, load
 
 
 def mae(y, p):
@@ -29,323 +26,266 @@ def model(config, iterations=None):
         learning_rate=config["learning_rate"],
         l2_leaf_reg=config["l2_leaf_reg"],
         random_seed=42,
-        thread_count=2,
+        thread_count=4,
         verbose=False,
         allow_writing_files=False,
     )
 
 
 def predict(m, x, mode):
-    return m.predict(x) + (
-        x.cur_dev_s.fillna(0).to_numpy() if mode == "residual" else 0
+    return m.predict(x, thread_count=1) + (
+        x.cur_dev_s.to_numpy() if mode == "residual" else 0
     )
 
 
-def metrics(y, p, points, x):
-    return {
-        "mae": mae(y, p),
-        "by_vehicle": {
-            str(k): mae(y[g.index], p[g.index])
-            for k, g in points.reset_index(drop=True).groupby("tr_id")
-        },
-        "by_class": {
-            str(k): mae(y[g.index], p[g.index])
-            for k, g in points.reset_index(drop=True).groupby("target_class")
-        },
-        "by_gps_age": {
-            name: mae(y[mask], p[mask])
-            for name, mask in [
-                ("fresh", x.gps_age_s.to_numpy() <= 60),
-                ("stale", x.gps_age_s.to_numpy() > 60),
-            ]
-            if mask.any()
-        },
+def mask_hint(x):
+    x = x.copy()
+    x["cur_dev_s"] = 0.0
+    if "cur_dev_zero" in x:
+        x["cur_dev_zero"] = 1.0
+    if "cur_dev_per_horizon" in x:
+        x["cur_dev_per_horizon"] = 0.0
+    return x
+
+
+def splits(p):
+    folds = [("vehicle", a, b) for a, b in GroupKFold(3).split(p, groups=p.tr_id)]
+    boundaries = [float(p.now.quantile(q)) for q in (0.5, 0.65, 0.8)]
+    for i, boundary in enumerate(boundaries):
+        end = boundaries[i + 1] if i + 1 < len(boundaries) else float("inf")
+        a = np.flatnonzero(
+            (p.now < boundary - 1800)
+            & (
+                np.maximum(p.target_time, p.target_time + p.target_delay_s)
+                < boundary - 900
+            )
+        )
+        b = np.flatnonzero((p.now >= boundary) & (p.now < end))
+        if not len(a) or not len(b):
+            raise ValueError("Insufficient data for forward validation")
+        folds.append(("time", a, b))
+    return folds
+
+
+def fit(config, x, y, mode, augmentation=0.0):
+    target = y - x.cur_dev_s.to_numpy() if mode == "residual" else y
+    weights = np.ones(len(x))
+    if augmentation:
+        extra = mask_hint(x)
+        x = pd.concat([x, extra], ignore_index=True)
+        target = np.concatenate([target, y])
+        weights = np.concatenate([weights, np.full(len(y), augmentation)])
+    m = model(config)
+    m.fit(
+        x,
+        target,
+        sample_weight=weights,
+        cat_features=["vehicle"] if "vehicle" in x else [],
+    )
+    return m
+
+
+def evaluate(p, x, xr, folds, config, cols, mode, augmentation=0.0):
+    y = p.target_delay_s.to_numpy()
+    errors = {"vehicle": [], "time": []}
+    receive_errors, missing_errors = [], []
+    oof = np.zeros(len(p))
+    for kind, tr, va in folds:
+        m = fit(config, x.iloc[tr][cols], y[tr], mode, augmentation)
+        pred = predict(m, x.iloc[va][cols], mode)
+        errors[kind].extend(abs(y[va] - pred).tolist())
+        if kind == "vehicle":
+            oof[va] = pred
+        else:
+            receive_errors.extend(
+                abs(y[va] - predict(m, xr.iloc[va][cols], mode)).tolist()
+            )
+            missing_errors.extend(
+                abs(y[va] - predict(m, mask_hint(x.iloc[va][cols]), mode)).tolist()
+            )
+    record = {
+        "config": config,
+        "features": cols,
+        "mode": mode,
+        "augmentation": augmentation,
+        "group_mae": float(np.mean(errors["vehicle"])),
+        "time_mae": float(np.mean(errors["time"])),
+        "receive_time_mae": float(np.mean(receive_errors)),
+        "missing_hint_mae": float(np.mean(missing_errors)),
     }
+    record["selection_mae"] = (record["group_mae"] + record["time_mae"]) / 2
+    return record, oof
 
 
 def run(root, out):
-    out = Path(out)
+    root, out = Path(root), Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    p, x, seq, gps = load(root, "train")
+    p, x, _ = load(root, "train", include_sequence=False)
+    _, xr, _ = load(root, "train", policy="receive", include_sequence=False)
     real = p.tr_id < 1000000
-    print("Vehicle IDs:", sorted(p.tr_id.unique()), flush=True)
-    print("Real rows:", int(real.sum()), flush=True)
-    p, x, seq, gps = (
-        p[real].reset_index(drop=True),
-        x[real].reset_index(drop=True),
-        seq[real],
-        gps[real].reset_index(drop=True),
-    )
+    p, x, xr = [v[real].reset_index(drop=True) for v in (p, x, xr)]
     y = p.target_delay_s.to_numpy()
-    hint = x.cur_dev_s.fillna(0).to_numpy()
-    folds = list(GroupKFold(3).split(x, y, p.tr_id))
-    boundary = float(p.now.quantile(0.7))
-    actual_arrival = p.target_time + p.target_delay_s
-    train_idx = np.flatnonzero(
-        (p.now < boundary - 1800) & (actual_arrival < boundary - 900)
+    folds = splits(p)
+    basic = ["cur_dev_s", "horizon_s", "hour_sin", "hour_cos"]
+    new = [
+        c
+        for c in x
+        if c.startswith(
+            (
+                "time_",
+                "safe_",
+                "current_stop",
+                "since_moving",
+                "stop_count",
+                "gps_jumps",
+            )
+        )
+    ]
+    legacy = [c for c in x if c not in new]
+    weighted = (
+        basic + ["gps_age_s", "cur_dev_zero", "cur_dev_per_horizon", "last_speed"] + new
     )
-    val_idx = np.flatnonzero(p.now >= boundary)
-    all_folds = folds + [(train_idx, val_idx)]
+    experiments, predictions = [], []
     configs = [
-        {"depth": d, "learning_rate": lr, "l2_leaf_reg": reg, "iterations": 700}
-        for d, lr, reg in [(4, 0.03, 10), (5, 0.05, 20), (6, 0.08, 30)]
+        {"depth": d, "learning_rate": lr, "l2_leaf_reg": reg, "iterations": n}
+        for d, lr, reg, n in [
+            (3, 0.05, 3, 192),
+            (4, 0.05, 3, 194),
+            (4, 0.08, 20, 128),
+            (5, 0.05, 20, 192),
+            (3, 0.1, 10, 128),
+            (5, 0.08, 3, 256),
+        ]
     ]
-    basic = [
-        "cur_dev_s",
-        "cur_dev_missing",
-        "horizon_s",
-        "hour_sin",
-        "hour_cos",
-        "stops_ahead",
-    ]
-    motion = [
-        c for c in x if c not in ["target_lon", "target_lat", "distance_target_m"]
-    ]
-    experiments = []
-    cache = {}
-    for cols_name, cols in [("basic", basic), ("motion", motion), ("spatial", list(x))]:
+    for cols in [
+        legacy,
+        weighted,
+        weighted + ["vehicle", "longitude", "latitude"],
+        list(x),
+    ]:
         for mode in ["direct", "residual"]:
             for config in configs:
-                oof = np.full(len(x), np.nan)
-                errors = []
-                trees = []
-                for i, (tr, va) in enumerate(all_folds):
-                    m = model(config)
-                    target = y - (hint if mode == "residual" else 0)
-                    m.fit(
-                        x.iloc[tr][cols],
-                        target[tr],
-                        eval_set=(x.iloc[va][cols], target[va]),
-                        early_stopping_rounds=70,
-                    )
-                    pred = predict(m, x.iloc[va][cols], mode)
-                    errors.append(mae(y[va], pred))
-                    trees.append(m.tree_count_)
-                    if i < 3:
-                        oof[va] = pred
-                score = (mae(y, oof) + errors[-1]) / 2
-                record = {
-                    "features": cols_name,
-                    "mode": mode,
-                    "config": config,
-                    "group_mae": mae(y, oof),
-                    "time_mae": errors[-1],
-                    "selection_mae": score,
-                    "trees": trees,
-                }
+                record, oof = evaluate(p, x, xr, folds, config, cols, mode)
                 experiments.append(record)
-                cache[len(experiments) - 1] = (oof, cols)
-                print(record, flush=True)
-    best_idx = min(
+                predictions.append(oof)
+                print(
+                    json.dumps({k: v for k, v in record.items() if k != "features"}),
+                    flush=True,
+                )
+    top = sorted(
         range(len(experiments)), key=lambda i: experiments[i]["selection_mae"]
-    )
-    best = experiments[best_idx]
-    oof, cols = cache[best_idx]
-    iterations = max(30, int(np.median(best["trees"])))
-    tcn_oof = np.zeros(len(x))
-    tcn_time = None
-    for i, (tr, va) in enumerate(all_folds):
-        _, pred = fit_predict(seq, hint, y, tr, va)
-        if i < 3:
-            tcn_oof[va] = pred
-        else:
-            tcn_time = mae(y[va], pred)
-    blends = {
-        str(w): mae(y, (1 - w) * oof + w * tcn_oof) for w in [0, 0.1, 0.25, 0.5, 1.0]
-    }
-    tcn, _ = fit_predict(seq, hint, y, np.arange(len(x)), np.arange(len(x)))
-    import torch
-
-    torch.save(tcn.state_dict(), out / "tcn.pt")
-    final = model(best["config"], iterations)
-    final.fit(x[cols], y - (hint if best["mode"] == "residual" else 0))
-    final.save_model(str(out / "delay.cbm"))
-    late = (y > 120).astype(int)
-    probs = np.zeros(len(x))
-    for tr, va in folds:
-        c = CatBoostClassifier(
-            iterations=200,
-            depth=4,
-            learning_rate=0.03,
-            l2_leaf_reg=20,
-            thread_count=2,
-            verbose=False,
-            random_seed=42,
-            allow_writing_files=False,
+    )[:3]
+    for i in top:
+        old = experiments[i]
+        record, oof = evaluate(
+            p, x, xr, folds, old["config"], old["features"], old["mode"], 0.15
         )
-        c.fit(x.iloc[tr][cols], late[tr])
-        probs[va] = c.predict_proba(x.iloc[va][cols])[:, 1]
-    logits = np.log(
-        np.clip(probs, 1e-06, 1 - 1e-06) / (1 - np.clip(probs, 1e-06, 1 - 1e-06))
-    )[:, None]
-    calibration = LogisticRegression(C=0.1).fit(logits, late)
-    calibrated = np.zeros(len(x))
-    for tr, va in folds:
-        cal = LogisticRegression(C=0.1).fit(logits[tr], late[tr])
-        calibrated[va] = cal.predict_proba(logits[va])[:, 1]
-    threshold_scores = {}
-    for threshold in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7]:
-        alarm = calibrated >= threshold
-        tp = int((alarm & (late == 1)).sum())
-        fp = int((alarm & (late == 0)).sum())
-        fn = int((~alarm & (late == 1)).sum())
-        threshold_scores[str(threshold)] = 2 * tp / max(1, 2 * tp + fp + fn)
-    threshold = float(max(threshold_scores, key=threshold_scores.get))
-    c.fit(x[cols], late)
-    c.save_model(str(out / "late.cbm"))
-    interval = float(np.quantile(np.abs(y - oof), 0.8))
-    metadata = {
+        experiments.append(record)
+        predictions.append(oof)
+        print(
+            json.dumps({k: v for k, v in record.items() if k != "features"}), flush=True
+        )
+    best_score = min(e["selection_mae"] for e in experiments)
+    eligible = [
+        i for i, e in enumerate(experiments) if e["selection_mae"] <= best_score + 0.25
+    ]
+    index = min(
+        eligible,
+        key=lambda i: (
+            experiments[i]["config"]["iterations"] * experiments[i]["config"]["depth"],
+            len(experiments[i]["features"]),
+            experiments[i]["selection_mae"],
+        ),
+    )
+    best = experiments[index]
+    cols, mode = best["features"], best["mode"]
+    start = time.perf_counter()
+    final = fit(best["config"], x[cols], y, mode, best["augmentation"])
+    fit_seconds = time.perf_counter() - start
+    final.save_model(str(out / "delay.cbm"))
+    meta = {
         "feature_version": FEATURE_VERSION,
         "features": cols,
-        "mode": best["mode"],
+        "mode": mode,
         "config": best["config"],
-        "iterations": iterations,
-        "calibration_coef": float(calibration.coef_[0, 0]),
-        "calibration_intercept": float(calibration.intercept_[0]),
-        "risk_threshold": threshold,
-        "interval_radius_s": interval,
-        "model_version": "catboost-v1",
-        "training_rows": len(x),
-        "tcn_weight": 0,
+        "iterations": final.tree_count_,
+        "augmentation": best["augmentation"],
+        "model_version": "catboost-motion-v5",
+        "training_rows": len(p),
+        "training_sample_ids": p.sample_id.tolist(),
+        "training_max_time": float(p.now.max()),
+        "training_labels_available_at": float(
+            np.maximum(p.target_time, p.target_time + y).max()
+        ),
+        "update_tree_cap": 256,
     }
-    (out / "metadata.json").write_text(json.dumps(metadata, indent=2))
-    pt, xt, _st, gpst = load(root, "test")
+    (out / "metadata.json").write_text(json.dumps(meta, indent=2))
+    pt, xt, _ = load(root, "test", include_sequence=False)
+    _, xrt, _ = load(root, "test", policy="receive", include_sequence=False)
     yt = pt.target_delay_s.to_numpy()
-    prediction = predict(final, xt[cols], best["mode"])
-    probability = c.predict_proba(xt[cols])[:, 1]
-    probability = calibration.predict_proba(
-        np.log(
-            np.clip(probability, 1e-06, 1 - 1e-06)
-            / (1 - np.clip(probability, 1e-06, 1 - 1e-06))
-        )[:, None]
-    )[:, 1]
-    delta = np.abs(yt - xt.cur_dev_s.to_numpy()) - np.abs(yt - prediction)
-    groups = [delta[pt.tr_id.to_numpy() == k] for k in pt.tr_id.unique()]
-    rng = np.random.default_rng(42)
-    boot = [
-        np.concatenate(
-            [groups[i] for i in rng.integers(0, len(groups), len(groups))]
-        ).mean()
-        for _ in range(1000)
-    ]
-    timings = []
-    for _ in range(250):
-        start = time.perf_counter()
-        final.predict(xt[cols].iloc[:1], thread_count=1)
-        timings.append((time.perf_counter() - start) * 1000)
+    pred = predict(final, xt[cols], mode)
     report = {
-        "hardware": platform.platform() + " " + platform.machine(),
-        "real_id_rule": "tr_id < 1000000; synthetic provenance unknown, excluded",
+        "selected": best,
+        "experiments": experiments,
         "train_rows": len(p),
         "train_vehicles": int(p.tr_id.nunique()),
-        "experiments": experiments,
-        "selected": best,
-        "validation": "3 held-out vehicle folds + forward time split purged by target availability and 15-minute history",
-        "forward_split": {
-            "train": len(train_idx),
-            "validation": len(val_idx),
-            "boundary": boundary,
+        "fit_seconds": fit_seconds,
+        "validation": "3 held-out vehicle folds and 3 non-overlapping forward windows, target-availability purge; test excluded from selection",
+        "selection_rule": "Within 0.25 seconds of best validation MAE choose smallest tree-depth budget, then feature count",
+        "folds": [
+            {
+                "kind": k,
+                "train": len(a),
+                "validation": len(b),
+                "validation_start": float(p.now.iloc[b].min()),
+            }
+            for k, a, b in folds
+        ],
+        "test": {
+            "mae": mae(yt, pred),
+            "persistence_mae": mae(yt, xt.cur_dev_s),
+            "receive_mae": mae(yt, predict(final, xrt[cols], mode)),
+            "missing_hint_mae": mae(yt, predict(final, mask_hint(xt[cols]), mode)),
         },
-        "baseline_test": {
-            "zero": mae(yt, np.zeros(len(yt))),
-            "median": mae(yt, np.full(len(yt), np.median(y))),
-            "persistence": mae(yt, xt.cur_dev_s),
-        },
-        "test": metrics(yt, prediction, pt, xt),
-        "improvement_vehicle_bootstrap_95": np.quantile(boot, [0.025, 0.975]).tolist(),
-        "gps_reconstructed_test_mae": mae(yt, predict(final, gpst[cols], best["mode"])),
-        "gps_reconstructed_coverage": float((gpst.cur_dev_missing == 0).mean()),
-        "tcn": {
-            "group_mae": mae(y, tcn_oof),
-            "time_mae": tcn_time,
-            "blend_group_mae": blends,
-            "deployed": False,
-        },
-        "probability_test": {
-            "brier": float(brier_score_loss(yt > 120, probability)),
-            "logloss": float(log_loss(yt > 120, probability)),
-            "bins": [
-                {
-                    "n": int(((probability >= lo) & (probability < lo + 0.2)).sum()),
-                    "predicted": float(
-                        probability[
-                            (probability >= lo) & (probability < lo + 0.2)
-                        ].mean()
-                    ),
-                    "observed": float(
-                        (
-                            yt[(probability >= lo) & (probability < lo + 0.2)] > 120
-                        ).mean()
-                    ),
-                }
-                for lo in np.arange(0, 1, 0.2)
-                if ((probability >= lo) & (probability < lo + 0.2)).any()
-            ],
-        },
-        "interval_test_coverage": float((np.abs(yt - prediction) <= interval).mean()),
-        "risk_threshold_f1": threshold_scores,
-        "model_latency_ms": dict(
-            zip(["p50", "p95", "p99"], np.quantile(timings, [0.5, 0.95, 0.99]).tolist())
-        ),
         "dataset_sha256": {
-            str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in Path(root).rglob("*.csv")
+            str(f.relative_to(root)): hashlib.sha256(f.read_bytes()).hexdigest()
+            for f in root.rglob("*.csv")
         },
         "limitations": [
-            "One day only; test overlaps train vehicles/time.",
-            "Synthetic provenance unknown; no synthetic rows used.",
-            "Neighbour context not deployed: matching route geometry unavailable.",
-            "TCN retained only as experiment; no ensemble deployed.",
+            "One day only; test has already been inspected in previous iterations and is not a fresh holdout",
+            "Platform score unknown",
+            "No contract flag distinguishes unknown deviation from genuine zero",
+            "Synthetic vehicles excluded",
+            "Tree budget is a latency proxy; end-to-end latency measured separately",
         ],
     }
     (out / "report.json").write_text(json.dumps(report, indent=2, allow_nan=False))
     pd.DataFrame(
-        {
-            "sample_id": p.sample_id,
-            "prediction": oof,
-            "target": y,
-            "tcn_prediction": tcn_oof,
-            "late_probability": calibrated,
-        }
+        {"sample_id": p.sample_id, "prediction": predictions[index], "target": y}
     ).to_csv(out / "oof.csv", index=False)
-    pd.DataFrame(
-        {"sample_id": pt.sample_id, "prediction": prediction, "target": yt}
-    ).to_csv(out / "test_predictions.csv", index=False)
-    pv, xv, _, _ = load(root, "validate")
-    pred = predict(final, xv[cols], best["mode"])
-    submission = pd.DataFrame({"sample_id": pv.sample_id, "prediction": pred})
-    assert (
-        len(submission) == 151
-        and submission.sample_id.is_unique
-        and np.isfinite(pred).all()
+    pd.DataFrame({"sample_id": pt.sample_id, "prediction": pred, "target": yt}).to_csv(
+        out / "test_predictions.csv", index=False
     )
-    template = pd.read_csv(Path(root) / "sample_submission.csv", sep=";")
-    assert set(template.sample_id) == set(submission.sample_id)
+    pv, xv, _ = load(root, "validate", include_sequence=False)
+    submission = pd.DataFrame(
+        {"sample_id": pv.sample_id, "prediction": predict(final, xv[cols], mode)}
+    )
+    template = pd.read_csv(root / "sample_submission.csv", sep=";")
+    if (
+        not submission.sample_id.is_unique
+        or set(submission.sample_id) != set(template.sample_id)
+        or not np.isfinite(submission.prediction).all()
+    ):
+        raise ValueError("Invalid submission")
     submission.set_index("sample_id").loc[template.sample_id].reset_index().to_csv(
         out / "submission.csv", sep=";", index=False
     )
-    print(
-        json.dumps(
-            {
-                k: report[k]
-                for k in [
-                    "selected",
-                    "baseline_test",
-                    "test",
-                    "tcn",
-                    "gps_reconstructed_test_mae",
-                    "model_latency_ms",
-                ]
-            },
-            indent=2,
-        ),
-        flush=True,
-    )
+    print(json.dumps(report["test"]), flush=True)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", default="dataset")
-    parser.add_argument("--output", default="ml/artifacts")
+    parser.add_argument("--dataset", type=Path, default=ROOT)
+    parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
     run(args.dataset, args.output)

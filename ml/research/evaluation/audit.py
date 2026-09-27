@@ -1,17 +1,16 @@
 import hashlib
 import json
-from pathlib import Path
 
 import pandas as pd
 
-from research.data.dataset import seconds
+from research.data.dataset import OUTPUT, ROOT, seconds
 
 
 def run():
-    root = Path("dataset")
+    root = ROOT
     result = {}
     for split in ["train", "test", "validate"]:
-        traffic = pd.read_csv(root / split / "traffic.csv")
+        traffic = pd.read_csv(root / split / "traffic.csv", low_memory=False)
         points = pd.read_csv(
             root
             / (
@@ -59,10 +58,8 @@ def run():
         )
         for split in ["test", "validate"]
     }
-    result["policy"] = (
-        "Schedule actual arrivals excluded structurally; validate labels never recovered. Synthetic lineage unavailable; synthetic rows excluded."
-    )
-    Path("ml/artifacts/audit.json").write_text(json.dumps(result, indent=2))
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    (OUTPUT / "audit.json").write_text(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":

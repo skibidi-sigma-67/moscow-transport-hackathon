@@ -1,0 +1,164 @@
+import itertools
+import math
+from dataclasses import dataclass
+
+FEATURE_VERSION = "v1"
+
+
+@dataclass(frozen=True)
+class Observation:
+    time: float
+    lon: float
+    lat: float
+    speed: float
+    heading: float = 0.0
+    valid: bool = True
+
+
+@dataclass(frozen=True)
+class Stop:
+    time: float
+    lon: float
+    lat: float
+    stop_id: int
+
+
+def distance(a, b):
+    if not all(math.isfinite(v) for v in (*a, *b)):
+        return math.nan
+    lat1, lat2 = math.radians(a[1]), math.radians(b[1])
+    h = (
+        math.sin((lat2 - lat1) / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin(math.radians(b[0] - a[0]) / 2) ** 2
+    )
+    return 6371000 * 2 * math.asin(min(1, math.sqrt(max(0, h))))
+
+
+def clean(history, now):
+    rows = sorted(
+        (p for p in history if now - 900 <= p.time <= now),
+        key=lambda p: (p.time, p.valid, str(p)),
+    )
+    dedup = {p.time: p for p in rows}
+    return [
+        p
+        for p in dedup.values()
+        if p.valid
+        and all(math.isfinite(v) for v in (p.lon, p.lat, p.speed, p.heading))
+        and -180 <= p.lon <= 180
+        and -90 <= p.lat <= 90
+        and p.lon != 0
+        and p.lat != 0
+        and 0 <= p.speed <= 130
+    ]
+
+
+def select_target(stops, now):
+    return next(
+        (s for s in sorted(stops, key=lambda s: s.time) if 600 < s.time - now <= 900),
+        None,
+    )
+
+
+def reconstruct_deviation(history, stops, now, radius=75):
+    rows = clean(history, now)
+    ordered = sorted(stops, key=lambda s: s.time)
+    last_index = -1
+    candidate = None
+    first = None
+    result = (None, None)
+    for p in rows:
+        matches = [
+            i
+            for i, s in enumerate(ordered)
+            if i > last_index
+            and s.time <= now
+            and distance((p.lon, p.lat), (s.lon, s.lat)) <= radius
+        ]
+        if len(matches) != 1 or p.speed > 12:
+            candidate = first = None
+            continue
+        i = matches[0]
+        if candidate == i and 2 <= p.time - first <= 45:
+            result = (first - ordered[i].time, now - first)
+            last_index = i
+            candidate = first = None
+        else:
+            candidate, first = i, p.time
+    return result
+
+
+def features(history, stops, target, now, cur_dev=None):
+    rows = clean(history, now)
+    f = {
+        "cur_dev_s": float(cur_dev) if cur_dev is not None else math.nan,
+        "cur_dev_missing": float(cur_dev is None),
+        "horizon_s": target.time - now,
+        "hour_sin": math.sin(2 * math.pi * (now % 86400) / 86400),
+        "hour_cos": math.cos(2 * math.pi * (now % 86400) / 86400),
+        "stops_ahead": float(sum(now < s.time <= target.time for s in stops)),
+        "target_lon": target.lon,
+        "target_lat": target.lat,
+        "gps_age_s": now - rows[-1].time if rows else 3600.0,
+        "distance_target_m": distance(
+            (rows[-1].lon, rows[-1].lat), (target.lon, target.lat)
+        )
+        if rows
+        else math.nan,
+    }
+    for window in (60, 180, 300, 600, 900):
+        points = [p for p in rows if p.time >= now - window]
+        durations = [
+            min(
+                30.0,
+                max(0.0, (points[i + 1].time if i + 1 < len(points) else now) - p.time),
+            )
+            for i, p in enumerate(points)
+        ]
+        total = sum(durations)
+        speeds = [p.speed for p in points]
+        f.update(
+            {
+                f"speed_{window}": sum(p.speed * d for p, d in zip(points, durations))
+                / total
+                if total
+                else math.nan,
+                f"idle_{window}": sum(
+                    d for p, d in zip(points, durations) if p.speed < 3
+                )
+                / total
+                if total
+                else math.nan,
+                f"coverage_{window}": total / window,
+                f"count_{window}": float(len(points)),
+                f"trend_{window}": speeds[-1] - speeds[0] if speeds else math.nan,
+                f"max_gap_{window}": max(
+                    [b.time - a.time for a, b in itertools.pairwise(points)]
+                    + [now - points[-1].time if points else float(window)]
+                ),
+            }
+        )
+    return f
+
+
+def sequence(history, now):
+    rows = clean(history, now)
+    result, j, last = [], 0, None
+    for t in range(60):
+        tick = now - 885 + t * 15
+        while j < len(rows) and rows[j].time <= tick:
+            last = rows[j]
+            j += 1
+        age = min(900.0, tick - last.time) if last else 900.0
+        fresh = last is not None and age <= 30
+        result.append(
+            [
+                last.speed / 100 if fresh else 0.0,
+                math.sin(math.radians(last.heading)) if fresh else 0.0,
+                math.cos(math.radians(last.heading)) if fresh else 0.0,
+                float(last.speed < 3) if fresh else 0.0,
+                float(fresh),
+                age / 900,
+            ]
+        )
+    return result

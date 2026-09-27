@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,7 +9,7 @@ from ml.settings import get_settings
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     app.state.predictor = Predictor(settings.app.model_dir)
     app.state.settings = settings
