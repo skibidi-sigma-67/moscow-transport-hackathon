@@ -1,0 +1,850 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Moscow Transport Predictor",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/reference/devices": {
+      "post": {
+        "tags": [
+          "Reference"
+        ],
+        "summary": "Регистрация устройства",
+        "description": "Регистрирует связь между идентификатором бортового оборудования (трекера) и транспортным средством в системе.",
+        "operationId": "register_device_api_v1_reference_devices_post",
+        "parameters": [
+          {
+            "name": "unit_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Unit Id"
+            }
+          },
+          {
+            "name": "tr_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Tr Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Созданная запись о привязке устройства к ТС",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceMappingDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reference/devices/upload": {
+      "post": {
+        "tags": [
+          "Reference"
+        ],
+        "summary": "Загрузка маппингов из CSV",
+        "description": "Парсит файл traffic.csv на бэкенде, массово извлекая уникальные пары (unit_id, tr_id).",
+        "operationId": "upload_devices_api_v1_reference_devices_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_devices_api_v1_reference_devices_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Количество успешно загруженных уникальных привязок",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "type": "object",
+                  "title": "Response Upload Devices Api V1 Reference Devices Upload Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry/{unit_id}/history": {
+      "get": {
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "История телеметрии устройства",
+        "description": "Возвращает историю перемещений (телеметрию) для указанного идентификатора трекера (бортового устройства) за последнее время.",
+        "operationId": "get_telemetry_history_api_v1_telemetry__unit_id__history_get",
+        "parameters": [
+          {
+            "name": "unit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Unit Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список исторических точек телеметрии",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TelemetryPointDto"
+                  },
+                  "title": "Response Get Telemetry History Api V1 Telemetry  Unit Id  History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/predictions/{tr_id}/trigger": {
+      "post": {
+        "tags": [
+          "Predictions"
+        ],
+        "summary": "Сгенерировать предсказание",
+        "description": "Запускает процесс агрегации признаков для транспортного средства и обращается к ML-модели для получения прогноза задержек и оценки риска.",
+        "operationId": "trigger_prediction_api_v1_predictions__tr_id__trigger_post",
+        "parameters": [
+          {
+            "name": "tr_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Tr Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Журнал выполненного предсказания с задержкой и уровнем риска",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionLogDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/state": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Получить состояние дашборда",
+        "description": "Агрегирует текущее состояние всех активных транспортных средств на линии, их последние координаты и свежие предсказания от ML-модели.",
+        "operationId": "get_dashboard_state_api_v1_dashboard_state_get",
+        "responses": {
+          "200": {
+            "description": "Общее состояние всех транспортных средств",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardStateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/{tr_id}/next": {
+      "get": {
+        "tags": [
+          "Schedule"
+        ],
+        "summary": "Следующая остановка по расписанию",
+        "description": "Возвращает информацию о следующей плановой остановке для транспортного средства, основываясь на текущем времени.",
+        "operationId": "get_next_stop_api_v1_schedule__tr_id__next_get",
+        "parameters": [
+          {
+            "name": "tr_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Tr Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Информация о следующей остановке",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchedulePlanDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/upload": {
+      "post": {
+        "tags": [
+          "Schedule"
+        ],
+        "summary": "Загрузка расписания в формате CSV",
+        "description": "Позволяет массово загрузить расписание движения транспортных средств в систему из CSV файла.",
+        "operationId": "upload_schedule_api_v1_schedule_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_schedule_api_v1_schedule_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Количество успешно загруженных записей",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "type": "object",
+                  "title": "Response Upload Schedule Api V1 Schedule Upload Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Проверка состояния системы",
+        "description": "Возвращает статус основного приложения, статус ML-сервиса, а также текущие настройки приложения.",
+        "operationId": "health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_upload_devices_api_v1_reference_devices_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "CSV файл traffic.csv"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_devices_api_v1_reference_devices_upload_post"
+      },
+      "Body_upload_schedule_api_v1_schedule_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "CSV файл с расписанием"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_schedule_api_v1_schedule_upload_post"
+      },
+      "DashboardStateResponse": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Временная метка формирования состояния дашборда"
+          },
+          "vehicles": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleState"
+            },
+            "type": "array",
+            "title": "Vehicles",
+            "description": "Список активных транспортных средств и их состояние"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "vehicles"
+        ],
+        "title": "DashboardStateResponse"
+      },
+      "DeviceMappingDto": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Внутренний идентификатор привязки"
+          },
+          "unit_id": {
+            "type": "integer",
+            "title": "Unit Id",
+            "description": "Идентификатор бортового оборудования (трекера)"
+          },
+          "tr_id": {
+            "type": "integer",
+            "title": "Tr Id",
+            "description": "Идентификатор транспортного средства"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Время создания записи"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Время последнего обновления записи"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "unit_id",
+          "tr_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DeviceMappingDto"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Статус сервиса"
+          },
+          "ml_status": {
+            "type": "string",
+            "title": "Ml Status",
+            "description": "Статус сервиса ML"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/HealthSettings",
+            "description": "Текущие настройки приложения"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "ml_status",
+          "settings"
+        ],
+        "title": "HealthResponse"
+      },
+      "HealthSettings": {
+        "properties": {
+          "prediction_cache_ttl": {
+            "type": "integer",
+            "title": "Prediction Cache Ttl",
+            "description": "Время жизни кэша предиктов в секундах"
+          },
+          "telemetry_max_history": {
+            "type": "integer",
+            "title": "Telemetry Max History",
+            "description": "Максимальное количество исторических записей телеметрии"
+          },
+          "stop_speed_threshold_kmh": {
+            "type": "number",
+            "title": "Stop Speed Threshold Kmh",
+            "description": "Порог скорости для фиксации остановки (км/ч)"
+          },
+          "ml_telemetry_window_minutes": {
+            "type": "integer",
+            "title": "Ml Telemetry Window Minutes",
+            "description": "Окно агрегации телеметрии для ML-модели (в минутах)"
+          },
+          "max_idle_gap_s": {
+            "type": "number",
+            "title": "Max Idle Gap S",
+            "description": "Максимально допустимый разрыв для простоя (в секундах)"
+          },
+          "historical_packet_delay_s": {
+            "type": "number",
+            "title": "Historical Packet Delay S",
+            "description": "Искусственная задержка для исторических пакетов (в секундах)"
+          },
+          "dashboard_websocket_update_interval_s": {
+            "type": "number",
+            "title": "Dashboard Websocket Update Interval S",
+            "description": "Интервал обновления дашборда по WebSocket (в секундах)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prediction_cache_ttl",
+          "telemetry_max_history",
+          "stop_speed_threshold_kmh",
+          "ml_telemetry_window_minutes",
+          "max_idle_gap_s",
+          "historical_packet_delay_s",
+          "dashboard_websocket_update_interval_s"
+        ],
+        "title": "HealthSettings"
+      },
+      "IncidentCard": {
+        "properties": {
+          "has_incident": {
+            "type": "boolean",
+            "title": "Has Incident",
+            "description": "Наличие инцидента/отклонения от нормы"
+          },
+          "predicted_delay_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Delay S",
+            "description": "Предсказанная задержка в секундах, если есть инцидент"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncidentPattern"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Технический код паттерна инцидента (например, 'TRAFFIC_JAM')"
+          },
+          "route_segment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Segment",
+            "description": "Участок маршрута, где прогнозируется задержка"
+          }
+        },
+        "type": "object",
+        "required": [
+          "has_incident"
+        ],
+        "title": "IncidentCard"
+      },
+      "IncidentPattern": {
+        "type": "string",
+        "enum": [
+          "TRAFFIC_JAM",
+          "ACCIDENT",
+          "ROAD_WORK",
+          "VEHICLE_BREAKDOWN",
+          "WEATHER_CONDITIONS",
+          "UNKNOWN_DELAY"
+        ],
+        "title": "IncidentPattern"
+      },
+      "PredictionLogDto": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Уникальный идентификатор записи предсказания"
+          },
+          "tr_id": {
+            "type": "integer",
+            "title": "Tr Id",
+            "description": "Уникальный идентификатор транспортного средства"
+          },
+          "predicted_delay_s": {
+            "type": "number",
+            "title": "Predicted Delay S",
+            "description": "Предсказанная задержка в секундах"
+          },
+          "risk_level": {
+            "$ref": "#/components/schemas/RiskLevel",
+            "description": "Уровень риска (Зеленый, Желтый, Красный)"
+          },
+          "pattern_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncidentPattern"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Технический код паттерна инцидента (например, 'TRAFFIC_JAM')"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Время создания записи предсказания"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tr_id",
+          "predicted_delay_s",
+          "risk_level",
+          "created_at"
+        ],
+        "title": "PredictionLogDto"
+      },
+      "RiskLevel": {
+        "type": "string",
+        "enum": [
+          "GREEN",
+          "YELLOW",
+          "RED"
+        ],
+        "title": "RiskLevel"
+      },
+      "SchedulePlanDto": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Уникальный идентификатор записи расписания"
+          },
+          "tr_id": {
+            "type": "integer",
+            "title": "Tr Id",
+            "description": "Идентификатор транспортного средства"
+          },
+          "stop_id": {
+            "type": "integer",
+            "title": "Stop Id",
+            "description": "Идентификатор остановки по маршруту"
+          },
+          "time_begin": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time Begin",
+            "description": "Плановое время прибытия на остановку"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address",
+            "description": "Адрес остановки"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude",
+            "description": "Долгота остановки"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude",
+            "description": "Широта остановки"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tr_id",
+          "stop_id",
+          "time_begin"
+        ],
+        "title": "SchedulePlanDto"
+      },
+      "TelemetryPointDto": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Временная метка получения координат"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Долгота"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Широта"
+          },
+          "speed": {
+            "type": "number",
+            "title": "Speed",
+            "description": "Скорость в км/ч"
+          },
+          "course": {
+            "type": "number",
+            "title": "Course",
+            "description": "Курс (направление движения в градусах)"
+          },
+          "location_valid": {
+            "type": "boolean",
+            "title": "Location Valid",
+            "description": "Признак валидности координат",
+            "default": true
+          },
+          "packet_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packet Time",
+            "description": "Время получения пакета"
+          },
+          "is_historical": {
+            "type": "boolean",
+            "title": "Is Historical",
+            "description": "Признак исторической записи (из черного ящика)",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "longitude",
+          "latitude",
+          "speed",
+          "course"
+        ],
+        "title": "TelemetryPointDto"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VehicleState": {
+        "properties": {
+          "tr_id": {
+            "type": "integer",
+            "title": "Tr Id",
+            "description": "Идентификатор транспортного средства"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Текущая долгота"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Текущая широта"
+          },
+          "risk_color": {
+            "$ref": "#/components/schemas/RiskLevel",
+            "description": "Текущий уровень риска (цвет светофора)"
+          },
+          "incident_card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncidentCard"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Карточка инцидента (присутствует, если риск отличается от зеленого)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tr_id",
+          "longitude",
+          "latitude",
+          "risk_color"
+        ],
+        "title": "VehicleState"
+      }
+    }
+  }
+}

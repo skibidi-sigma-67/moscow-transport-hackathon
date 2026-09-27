@@ -1,0 +1,460 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Transport delay predictor",
+    "version": "1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/predict": {
+      "post": {
+        "summary": "Predict",
+        "operationId": "predict_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MLPredictionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MLPredictionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IncidentPattern": {
+        "type": "string",
+        "enum": [
+          "TRAFFIC_JAM",
+          "ACCIDENT",
+          "ROAD_WORK",
+          "VEHICLE_BREAKDOWN",
+          "WEATHER_CONDITIONS",
+          "UNKNOWN_DELAY"
+        ],
+        "title": "IncidentPattern"
+      },
+      "MLPredictionRequest": {
+        "properties": {
+          "tr_id": {
+            "type": "integer",
+            "title": "Tr Id",
+            "description": "Идентификатор транспортного средства"
+          },
+          "target_stop_id": {
+            "type": "integer",
+            "title": "Target Stop Id",
+            "description": "Идентификатор целевой остановки"
+          },
+          "target_time_begin": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Target Time Begin",
+            "description": "Плановое время прибытия по расписанию"
+          },
+          "current_time_T": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Current Time T",
+            "description": "Текущее время T"
+          },
+          "cur_dev_s": {
+            "type": "number",
+            "title": "Cur Dev S",
+            "description": "Текущее фактическое отклонение от расписания (в секундах)"
+          },
+          "aggregates": {
+            "$ref": "#/components/schemas/TelemetryAggregates",
+            "description": "Агрегированные показатели"
+          },
+          "window": {
+            "$ref": "#/components/schemas/TelemetryWindow",
+            "description": "Окно телеметрии и точки"
+          },
+          "route_features": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteFeatures"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Прекомпилированные фичи маршрута (из расписания)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tr_id",
+          "target_stop_id",
+          "target_time_begin",
+          "current_time_T",
+          "cur_dev_s",
+          "aggregates",
+          "window"
+        ],
+        "title": "MLPredictionRequest"
+      },
+      "MLPredictionResponse": {
+        "properties": {
+          "predicted_delay_s": {
+            "type": "number",
+            "title": "Predicted Delay S",
+            "description": "Спрогнозированная задержка (в секундах)"
+          },
+          "risk_level": {
+            "$ref": "#/components/schemas/RiskLevel",
+            "description": "Оценка риска (GREEN, YELLOW, RED)"
+          },
+          "pattern_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncidentPattern"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Технический код паттерна инцидента (например, 'TRAFFIC_JAM')"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PredictionStatus",
+            "description": "Статус предсказания",
+            "default": "OK"
+          }
+        },
+        "type": "object",
+        "required": [
+          "predicted_delay_s",
+          "risk_level"
+        ],
+        "title": "MLPredictionResponse"
+      },
+      "PredictionStatus": {
+        "type": "string",
+        "enum": [
+          "OK",
+          "DEGRADED",
+          "UNAVAILABLE",
+          "NO_TARGET"
+        ],
+        "title": "PredictionStatus"
+      },
+      "RiskLevel": {
+        "type": "string",
+        "enum": [
+          "GREEN",
+          "YELLOW",
+          "RED"
+        ],
+        "title": "RiskLevel"
+      },
+      "RouteFeatures": {
+        "properties": {
+          "cur_dev_missing": {
+            "type": "number",
+            "title": "Cur Dev Missing",
+            "description": "Признак отсутствия исторического отклонения"
+          },
+          "horizon_s": {
+            "type": "number",
+            "title": "Horizon S",
+            "description": "Горизонт предсказания в секундах (разница между плановым прибытием и текущим временем)"
+          },
+          "hour_sin": {
+            "type": "number",
+            "title": "Hour Sin",
+            "description": "Синус текущего времени суток (для учета цикличности)"
+          },
+          "hour_cos": {
+            "type": "number",
+            "title": "Hour Cos",
+            "description": "Косинус текущего времени суток (для учета цикличности)"
+          },
+          "stops_ahead": {
+            "type": "number",
+            "title": "Stops Ahead",
+            "description": "Количество остановок до целевой остановки"
+          },
+          "target_lon": {
+            "type": "number",
+            "title": "Target Lon",
+            "description": "Долгота целевой остановки"
+          },
+          "target_lat": {
+            "type": "number",
+            "title": "Target Lat",
+            "description": "Широта целевой остановки"
+          },
+          "distance_target_m": {
+            "type": "number",
+            "title": "Distance Target M",
+            "description": "Дистанция до целевой остановки по прямой (в метрах)"
+          },
+          "gps_age_s": {
+            "type": "number",
+            "title": "Gps Age S",
+            "description": "Возраст последней валидной GPS-отметки в секундах"
+          },
+          "last_lon": {
+            "type": "number",
+            "title": "Last Lon",
+            "description": "Долгота из последней валидной отметки"
+          },
+          "last_lat": {
+            "type": "number",
+            "title": "Last Lat",
+            "description": "Широта из последней валидной отметки"
+          },
+          "last_speed": {
+            "type": "number",
+            "title": "Last Speed",
+            "description": "Скорость из последней валидной отметки"
+          },
+          "heading_alignment": {
+            "type": "number",
+            "title": "Heading Alignment",
+            "description": "Согласованность текущего курса и направления на цель (косинус разницы углов)"
+          },
+          "target_east_m": {
+            "type": "number",
+            "title": "Target East M",
+            "description": "Смещение до цели по оси Восток (в метрах)"
+          },
+          "target_north_m": {
+            "type": "number",
+            "title": "Target North M",
+            "description": "Смещение до цели по оси Север (в метрах)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cur_dev_missing",
+          "horizon_s",
+          "hour_sin",
+          "hour_cos",
+          "stops_ahead",
+          "target_lon",
+          "target_lat",
+          "distance_target_m",
+          "gps_age_s",
+          "last_lon",
+          "last_lat",
+          "last_speed",
+          "heading_alignment",
+          "target_east_m",
+          "target_north_m"
+        ],
+        "title": "RouteFeatures"
+      },
+      "TelemetryAggregates": {
+        "properties": {
+          "segment_avg_speed": {
+            "type": "number",
+            "title": "Segment Avg Speed",
+            "description": "Средняя скорость на текущем сегменте (км/ч)"
+          },
+          "idle_time_s": {
+            "type": "number",
+            "title": "Idle Time S",
+            "description": "Время простоя на светофорах/в пробках (в секундах)"
+          },
+          "coverage_ratio": {
+            "type": "number",
+            "title": "Coverage Ratio",
+            "description": "Отношение фактического кол-ва точек к ожидаемому"
+          }
+        },
+        "type": "object",
+        "required": [
+          "segment_avg_speed",
+          "idle_time_s",
+          "coverage_ratio"
+        ],
+        "title": "TelemetryAggregates"
+      },
+      "TelemetryPoint": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Время фиксации координат"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Долгота"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Широта"
+          },
+          "speed": {
+            "type": "number",
+            "title": "Speed",
+            "description": "Скорость движения в км/ч"
+          },
+          "course": {
+            "type": "number",
+            "title": "Course",
+            "description": "Курс направления"
+          },
+          "location_valid": {
+            "type": "boolean",
+            "title": "Location Valid",
+            "description": "Признак валидности координат"
+          },
+          "packet_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Packet Time",
+            "description": "Время получения пакета"
+          },
+          "is_historical": {
+            "type": "boolean",
+            "title": "Is Historical",
+            "description": "Признак исторической записи (из черного ящика)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "longitude",
+          "latitude",
+          "speed",
+          "course",
+          "location_valid",
+          "packet_time",
+          "is_historical"
+        ],
+        "title": "TelemetryPoint"
+      },
+      "TelemetryWindow": {
+        "properties": {
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Time",
+            "description": "Начало временного окна телеметрии"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End Time",
+            "description": "Конец временного окна телеметрии"
+          },
+          "recent_points": {
+            "items": {
+              "$ref": "#/components/schemas/TelemetryPoint"
+            },
+            "type": "array",
+            "title": "Recent Points",
+            "description": "Последние телеметрические отметки (история)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_time",
+          "end_time",
+          "recent_points"
+        ],
+        "title": "TelemetryWindow"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
