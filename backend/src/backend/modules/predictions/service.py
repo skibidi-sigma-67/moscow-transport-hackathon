@@ -1,16 +1,15 @@
 from datetime import UTC, datetime, timedelta
 
-import httpx
 import redis.asyncio as redis
 from geopy.distance import distance as geopy_distance
 
+from backend.modules.ml.service import MLService
 from backend.modules.schedule.service import ScheduleService
 from backend.modules.telemetry.service import TelemetryService
 from backend.settings import Settings
 from commons.contracts.v1.api.predictions import PredictionLogDto
 from commons.contracts.v1.ml.requests import MLPredictionRequest, TelemetryPoint
-from commons.contracts.v1.ml.responses import MLPredictionResponse
-from commons.enums import RiskLevel
+from commons.enums import IncidentPattern, RiskLevel
 
 from .repository import PredictionRepository
 
@@ -22,12 +21,14 @@ class PredictionService:
         telemetry_service: TelemetryService,
         redis_client: redis.Redis,
         schedule_service: ScheduleService,
+        ml_service: MLService,
         settings: Settings,
     ) -> None:
         self.repository = repository
         self.telemetry = telemetry_service
         self.redis = redis_client
         self.schedule = schedule_service
+        self.ml_service = ml_service
         self.settings = settings
 
     async def generate_prediction(self, tr_id: int) -> PredictionLogDto:
@@ -60,15 +61,17 @@ class PredictionService:
                 delta = (
                     history_sorted[i].timestamp - history_sorted[i - 1].timestamp
                 ).total_seconds()
-                
+
                 if delta > self.settings.app.max_idle_gap_s:
                     continue
 
                 if history_sorted[i].speed < self.settings.app.stop_speed_threshold_kmh:
                     idle_time_s += max(0, delta)
 
-            window_points = [p for p in history_sorted if window_start <= p.timestamp <= window_end]
-            
+            window_points = [
+                p for p in history_sorted if window_start <= p.timestamp <= window_end
+            ]
+
             telemetry_points = [
                 TelemetryPoint(
                     timestamp=p.timestamp,
@@ -83,16 +86,24 @@ class PredictionService:
                 for p in window_points
             ]
 
-            expected_points = (self.settings.app.ml_telemetry_window_minutes * 60) / 10.0
+            expected_points = (
+                self.settings.app.ml_telemetry_window_minutes * 60
+            ) / 10.0
             coverage_ratio = min(1.0, len(window_points) / expected_points)
 
         cur_dev_s = 0.0
         previous_stop = await self.schedule.get_previous_stop(tr_id, current_time_t)
 
-        if previous_stop and previous_stop.longitude and previous_stop.latitude and history_sorted:
+        if (
+            previous_stop
+            and previous_stop.longitude
+            and previous_stop.latitude
+            and history_sorted
+        ):
             for p in reversed(history_sorted):
                 dist = geopy_distance(
-                    (p.latitude, p.longitude), (previous_stop.latitude, previous_stop.longitude)
+                    (p.latitude, p.longitude),
+                    (previous_stop.latitude, previous_stop.longitude),
                 ).meters
 
                 if dist < 50.0 and p.speed < self.settings.app.stop_speed_threshold_kmh:
@@ -117,32 +128,9 @@ class PredictionService:
             recent_telemetry=telemetry_points,
         )
 
-        try:
-            async with httpx.AsyncClient(timeout=self.settings.ml.timeout) as client:
-                resp = await client.post(
-                    self.settings.ml.url,
-                    json=ml_request.model_dump(mode="json"),
-                )
-                resp.raise_for_status()
-                ml_resp = MLPredictionResponse.model_validate_json(resp.read())
-        except Exception as e:
-            fallback_delay = cur_dev_s
-
-            if fallback_delay > 300:
-                risk = RiskLevel.RED
-            elif fallback_delay > 120:
-                risk = RiskLevel.YELLOW
-            else:
-                risk = RiskLevel.GREEN
-
-            ml_resp = MLPredictionResponse(
-                predicted_delay_s=fallback_delay,
-                risk_level=risk,
-                pattern_reason=None,
-            )
-            error_text = f"ML Error: {e}"
-        else:
-            error_text = None
+        ml_resp, error_text = await self.ml_service.get_prediction(
+            ml_request, fallback_delay_s=cur_dev_s
+        )
 
         log = await self.repository.save_prediction(
             tr_id=tr_id,
@@ -150,7 +138,7 @@ class PredictionService:
             risk_level=ml_resp.risk_level,
             pattern_reason=ml_resp.pattern_reason,
             error_text=error_text,
-            status="ERROR" if error_text else "OK",
+            status=ml_resp.status,
         )
 
         dto = PredictionLogDto(
@@ -158,7 +146,9 @@ class PredictionService:
             tr_id=log.tr_id,
             predicted_delay_s=log.predicted_delay_s,
             risk_level=RiskLevel(log.risk_level),
-            pattern_reason=log.pattern_reason,
+            pattern_reason=IncidentPattern(log.pattern_reason)
+            if log.pattern_reason
+            else None,
             created_at=log.created_at,
         )
 

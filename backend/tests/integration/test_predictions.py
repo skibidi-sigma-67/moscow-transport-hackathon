@@ -28,7 +28,7 @@ async def test_dashboard_triggers_prediction(app_client, redis_client, session):
     plan = SchedulePlan(
         tr_id=tr_id,
         stop_id=1010,
-        time_begin=current_time + timedelta(minutes=10),
+        time_begin=current_time + timedelta(minutes=12),
         address="Test Stop",
         longitude=37.1,
         latitude=55.1,

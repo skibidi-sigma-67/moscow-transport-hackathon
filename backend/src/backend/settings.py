@@ -1,7 +1,12 @@
 from functools import lru_cache
 
 from pydantic import BaseModel, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    YamlConfigSettingsSource,
+)
 
 
 class AppSettings(BaseModel):
@@ -40,8 +45,16 @@ class RedisSettings(BaseModel):
 
 
 class MLSettings(BaseModel):
-    url: str = "http://localhost:8001/predict"
+    base_url: str = "http://localhost:8001"
     timeout: float = 10.0
+
+    @property
+    def url(self) -> str:
+        return f"{self.base_url}/predict"
+
+    @property
+    def health_url(self) -> str:
+        return f"{self.base_url}/health"
 
 
 class NDTPSettings(BaseModel):
@@ -58,10 +71,29 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_file=".env",
+        yaml_file="settings.yaml",
+        yaml_file_encoding="utf-8",
         env_file_encoding="utf-8",
         env_nested_delimiter="__",
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            YamlConfigSettingsSource(settings_cls),
+            file_secret_settings,
+        )
 
 
 @lru_cache

@@ -62,10 +62,14 @@ async def session(engine) -> AsyncGenerator[AsyncSession]:
         yield session
 
 
+from backend.modules.ml.service import MLService
+
+
 @pytest_asyncio.fixture
 async def app_client(engine, redis_client) -> AsyncGenerator[AsyncClient]:
     app = create_app()
     app.state.settings = Settings()
+    app.state.ml_service = MLService(app.state.settings)
 
     maker = async_sessionmaker(engine, expire_on_commit=False)
     app.state.session_maker = maker

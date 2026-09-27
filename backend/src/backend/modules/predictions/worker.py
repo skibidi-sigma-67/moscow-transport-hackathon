@@ -4,6 +4,7 @@ import logging
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from backend.modules.ml.service import MLService
 from backend.modules.predictions.repository import PredictionRepository
 from backend.modules.predictions.service import PredictionService
 from backend.modules.schedule.repository import ScheduleRepository
@@ -22,12 +23,14 @@ class PredictionWorker:
         redis_client: Redis,
         session_maker: async_sessionmaker,
         settings: Settings,
+        ml_service: MLService,
         target_cycle_time_s: float = 30.0,
     ) -> None:
         self.name = name
         self.redis = redis_client
         self.session_maker = session_maker
         self.settings = settings
+        self.ml_service = ml_service
         self.target_cycle_time_s = target_cycle_time_s
         self._stop_event = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
@@ -108,6 +111,7 @@ class PredictionWorker:
                 telemetry_service=telemetry_service,
                 redis_client=self.redis,
                 schedule_service=schedule_service,
+                ml_service=self.ml_service,
                 settings=self.settings,
             )
             await service.generate_prediction(tr_id)

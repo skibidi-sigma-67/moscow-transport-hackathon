@@ -18,8 +18,14 @@ def get_prediction_service(
 ) -> PredictionService:
     repository = PredictionRepository(session)
     settings = request.app.state.settings
+    ml_service = request.app.state.ml_service
     return PredictionService(
-        repository, telemetry_service, redis_client, schedule_service, settings
+        repository,
+        telemetry_service,
+        redis_client,
+        schedule_service,
+        ml_service,
+        settings,
     )
 
 
