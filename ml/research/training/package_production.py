@@ -10,13 +10,13 @@ from ml.models.predictor import ENSEMBLE_FILES, Predictor
 from research.data.dataset import OUTPUT
 
 APPROVED_MODELS = {
-    "legacy-upgrade-v3": (
+    "model_2": (
         "994e95749d4d1efbf9e8e0acca77a4b5696bfa933d08f653dbf276922ba6060b"
     ),
-    "legacy-upgrade-v4b": (
+    "model_3": (
         "5d663592fb4387dabc79890c7950b28879f27fe391b53cf303abd2787299471d"
     ),
-    "legacy-upgrade-v5": (
+    "model_4": (
         "abf81c67a48b92611fcad3f0d476826c0d26d7764c674fb7bf879bd47f43b3a9"
     ),
 }

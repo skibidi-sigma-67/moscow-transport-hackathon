@@ -12,9 +12,9 @@ from ml.features import FEATURE_VERSION, SUPPORTED_FEATURES, features, timestamp
 
 FRESHNESS_SECONDS = 30
 ENSEMBLE_WEIGHTS = {
-    "legacy-upgrade-v3": 0.4,
-    "legacy-upgrade-v4b": 0.4,
-    "legacy-upgrade-v5": 0.2,
+    "model_2": 0.4,
+    "model_3": 0.4,
+    "model_4": 0.2,
 }
 ENSEMBLE_FILES = {
     "delay.cbm",
