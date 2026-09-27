@@ -7,7 +7,7 @@ import {
   YANDEX_MAP_API_KEY,
 } from '../config';
 import type { VehicleState } from '../contracts';
-import { REASON_LABELS, RISK_COLORS } from '../dashboardView';
+import { REASON_LABELS, RISK_COLORS, RISK_LABELS } from '../dashboardView';
 
 declare global {
   interface Window {
@@ -76,7 +76,7 @@ function balloonContent(vehicle: VehicleState): string {
   return `
     <div class="vehicle-balloon">
       <strong>ТС №${vehicle.tr_id}</strong>
-      <p>Статус: ${vehicle.risk_color}</p>
+      <p>Статус: ${RISK_LABELS[vehicle.risk_color]}</p>
       ${incident?.predicted_delay_s !== null && incident?.predicted_delay_s !== undefined
         ? `<p>Задержка: ${Math.round(incident.predicted_delay_s)} сек</p>` : ''}
       ${reason ? `<p>Причина: ${escapeHtml(reason)}</p>` : ''}

@@ -8,6 +8,12 @@ export const RISK_COLORS: Record<RiskColor, string> = {
   RED: '#c53333',
 };
 
+export const RISK_LABELS: Record<RiskColor, string> = {
+  GREEN: 'В графике',
+  YELLOW: 'Внимание',
+  RED: 'Опасность',
+};
+
 export const REASON_LABELS: Record<IncidentReason, string> = {
   TRAFFIC_JAM: 'Плотный трафик',
   ACCIDENT: 'ДТП',
@@ -60,9 +66,9 @@ export function buildDashboardView(vehicles: VehicleState[]) {
     segmentChartData: [...segments].map(([name, delay]) => ({ name, delay }))
       .sort((a, b) => b.delay - a.delay).slice(0, TOP_SEGMENTS_LIMIT),
     riskChartData: [
-      { name: 'В графике', value: kpis.green, color: RISK_COLORS.GREEN },
-      { name: 'Внимание', value: kpis.yellow, color: RISK_COLORS.YELLOW },
-      { name: 'Опасность', value: kpis.red, color: RISK_COLORS.RED },
+      { name: RISK_LABELS.GREEN, value: kpis.green, color: RISK_COLORS.GREEN },
+      { name: RISK_LABELS.YELLOW, value: kpis.yellow, color: RISK_COLORS.YELLOW },
+      { name: RISK_LABELS.RED, value: kpis.red, color: RISK_COLORS.RED },
     ],
     reasonChartData: [...reasons].map(([reason, value]) => ({
       name: REASON_LABELS[reason],
