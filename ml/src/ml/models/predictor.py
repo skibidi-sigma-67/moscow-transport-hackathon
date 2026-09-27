@@ -6,7 +6,7 @@ import numpy as np
 from catboost import CatBoostRegressor
 
 from commons.contracts.v1.ml.responses import MLPredictionResponse
-from commons.enums import PredictionStatus, RiskLevel
+from commons.enums import IncidentPattern, PredictionStatus, RiskLevel
 from ml.features import FEATURE_VERSION, SUPPORTED_FEATURES, features, timestamp
 from ml.schedule import ROUTE_FEATURES, ScheduleCatalog, schedule_features
 
@@ -52,6 +52,11 @@ class Predictor:
         self.regressor.load_model(str(directory / "delay.cbm"))
         if self.regressor.feature_names_ != self.meta["features"]:
             raise ValueError("Incompatible model features")
+        self.feature_names = set(self.meta["features"]) | {
+            "speed_mean_180",
+            "idle_180",
+            "coverage_180",
+        }
         self.catalog = None
         self.ensemble = ()
         self.model_version = self.meta["model_version"]
@@ -91,7 +96,7 @@ class Predictor:
         return delay
 
     def predict(self, request):
-        values = features(request, self.meta["features"])
+        values = features(request, self.feature_names)
         matched = None if self.catalog is None else self.catalog.resolve(request)
         if matched is None:
             delay = self._baseline_delay(request, values)
@@ -128,10 +133,20 @@ class Predictor:
             and timestamp(point.packet_time) <= now
             for point in request.recent_telemetry
         )
+        pattern = None
+        if risk != RiskLevel.GREEN:
+            pattern = IncidentPattern.UNKNOWN_DELAY
+            if (
+                live
+                and values["coverage_180"] >= 0.5
+                and values["speed_mean_180"] <= 8
+                and values["idle_180"] >= 0.5
+            ):
+                pattern = IncidentPattern.TRAFFIC_JAM
         return MLPredictionResponse(
             predicted_delay_s=delay,
             risk_level=risk,
-            pattern_reason=None,
+            pattern_reason=pattern,
             status=PredictionStatus.OK
             if live and (self.catalog is None or matched is not None)
             else PredictionStatus.DEGRADED,

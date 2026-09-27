@@ -8,7 +8,7 @@ from ml.main import app
 from ml.settings import get_settings
 
 from commons.contracts.v1.ml.responses import MLPredictionResponse
-from commons.enums import PredictionStatus
+from commons.enums import IncidentPattern, PredictionStatus
 
 
 @pytest.fixture(scope="module")
@@ -122,3 +122,27 @@ def test_prediction_survives_missing_history_and_reconnect(client):
     result = client.post("/predict", json=data)
     assert result.status_code == 200
     assert result.json()["status"] == PredictionStatus.OK
+
+
+def test_pattern_reason_uses_current_movement(client, monkeypatch):
+    monkeypatch.setattr(client.app.state.predictor, "_baseline_delay", lambda *_: 180.0)
+    result = client.post("/predict", json=payload())
+    assert result.json()["pattern_reason"] == IncidentPattern.UNKNOWN_DELAY
+
+    data = payload()
+    now = datetime.fromisoformat(data["current_time_T"])
+    point = data["recent_telemetry"][0]
+    data["recent_telemetry"] = [
+        dict(
+            point,
+            timestamp=(now - timedelta(seconds=15 * i)).isoformat(),
+            speed=1,
+        )
+        for i in range(12)
+    ]
+    result = client.post("/predict", json=data)
+    assert result.json()["pattern_reason"] == IncidentPattern.TRAFFIC_JAM
+
+    data["recent_telemetry"] = []
+    result = client.post("/predict", json=data)
+    assert result.json()["pattern_reason"] == IncidentPattern.UNKNOWN_DELAY
